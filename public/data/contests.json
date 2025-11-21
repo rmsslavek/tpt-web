@@ -1,0 +1,10 @@
+[
+  {
+    "id": "CA-R1",
+    "title": "CodeArena Round #1",
+    "startTime": "2025-11-01T12:00:00.000Z",
+    "durationMinutes": 120,
+    "problems": ["A100", "B101", "C102"]
+  }
+]
+

@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "tpt-web-4825b"
+  },
+  "targets": {
+    "tpt-web-4825b": {
+      "hosting": {
+        "default": [
+          "tpt-web-4825b"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

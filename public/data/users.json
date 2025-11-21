@@ -1,0 +1,6 @@
+[
+  { "handle": "tourist_demo", "password": "demo", "rating": 3800, "country": "RU", "org": "—" },
+  { "handle": "benq_demo", "password": "demo", "rating": 3600, "country": "US", "org": "—" },
+  { "handle": "newbie", "password": "1234", "rating": 800, "country": "RS", "org": "—" }
+]
+

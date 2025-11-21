@@ -1,0 +1,42 @@
+[
+  {
+    "id": "A100",
+    "title": "Zbir dva broja",
+    "difficulty": 800,
+    "tags": ["bazično", "string", "aritmetika"],
+    "timeLimit": 1000,
+    "memoryLimit": 256,
+    "statement": "<p>Data su dva broja u jednoj liniji, razdvojena razmakom. Ispišite njihov zbir.</p><p><b>Ulaz:</b> jedna linija sa dva cela broja.</p><p><b>Izlaz:</b> jedan ceo broj — zbir.</p>",
+    "samples": [
+      { "input": "2 3\n", "output": "5\n" },
+      { "input": "-10 7\n", "output": "-3\n" }
+    ]
+  },
+  {
+    "id": "B101",
+    "title": "Brojanje reči",
+    "difficulty": 900,
+    "tags": ["parsiranje", "string"],
+    "timeLimit": 1000,
+    "memoryLimit": 256,
+    "statement": "<p>Dato je više linija teksta. Prebrojite koliko reči sadrži tekst. Reč je niz znakova razdvojen razmakom.</p>",
+    "samples": [
+      { "input": "hello world\n", "output": "2\n" },
+      { "input": "  a   bb  ccc \n", "output": "3\n" }
+    ]
+  },
+  {
+    "id": "C102",
+    "title": "Najveći broj",
+    "difficulty": 1000,
+    "tags": ["sortiranje"],
+    "timeLimit": 2000,
+    "memoryLimit": 256,
+    "statement": "<p>Data je lista celih brojeva. Ispišite najveći.</p>",
+    "samples": [
+      { "input": "5\n1 9 3 9 5\n", "output": "9\n" },
+      { "input": "3\n-1 -5 -3\n", "output": "-1\n" }
+    ]
+  }
+]
+
