@@ -37,6 +37,37 @@ export function HomeView(){
           <div class="subline"></div>
         </a>
       </div>
+      <div class="muted" style="margin-top:12px">
+        <button class="btn ghost" id="testFirestoreBtn" type="button">Test Firestore upis</button>
+        <span id="testFirestoreStatus" style="margin-left:8px;font-size:12px;"></span>
+      </div>
+      <script type="module">
+        import { firestore, collection, addDoc, serverTimestamp } from './js/firebaseClient.js';
+        const btn = document.getElementById('testFirestoreBtn');
+        const statusEl = document.getElementById('testFirestoreStatus');
+        const setStatus = (text, tone='muted') => {
+          if (!statusEl) return;
+          statusEl.textContent = text;
+          statusEl.style.color = tone === 'ok' ? '#6ddf6d' : (tone === 'err' ? '#ff7b7b' : 'inherit');
+        };
+        if (btn) {
+          btn.addEventListener('click', async () => {
+            setStatus('⌛ upisujem...');
+            try {
+              const ref = await addDoc(collection(firestore, 'test'), {
+                msg: 'pozdrav sa emulatora',
+                t: Date.now(),
+                createdAt: serverTimestamp(),
+              });
+              setStatus('✅ upisano u test/' + ref.id, 'ok');
+              console.info('[diag] Firestore test write ok', ref.id);
+            } catch (err) {
+              console.error('Firestore test write fail', err);
+              setStatus('❌ greska: ' + (err?.message || err), 'err');
+            }
+          });
+        }
+      </script>
     </div>
     <div class="panel">
       <h3>Uskoro počinje</h3>

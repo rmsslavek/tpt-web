@@ -2,6 +2,17 @@
   "livePreview.defaultPreviewPath": "/public/index.html",
   "liveServer.settings.port": 5500,
   "liveServer.settings.CustomBrowser": "chrome",
-  "liveServer.settings.root": "/public",
-  "liveServer.settings.host": "127.0.0.1"
+  "liveServer.settings.root": "public",
+  "liveServer.settings.host": "127.0.0.1",
+  "liveServer.settings.httpHeaders": [
+    {
+      "source": "**/*",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self' https://www.gstatic.com https://www.googleapis.com https://accounts.google.com; script-src 'self' https://www.gstatic.com https://accounts.google.com 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://firestore.googleapis.com https://www.googleapis.com https://www.gstatic.com https://accounts.google.com; img-src 'self' data:; font-src 'self' data:;"
+        }
+      ]
+    }
+  ]
 }

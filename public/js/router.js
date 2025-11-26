@@ -10,6 +10,8 @@ import { RanklistView } from './views/ranklist.js';
 import { TestsListView, TestCreateView, TestRunView, TestEditView } from './views/tests.js';
 import { initTermButtons } from './termButton.js';
 
+const DEBUG_DUMP_KEY = 'ca_debug_dump';
+
 const routes = [
   { path: /^#\/?$/, view: HomeView },
   { path: /^#\/problemset\/?$/, view: ProblemsView },
@@ -60,6 +62,7 @@ async function render() {
       runInlineScripts(viewEl());
       attachActions(viewEl());
       initTermButtons(viewEl());
+      maybeDumpRender(h, html);
       return;
     }
   }
@@ -73,4 +76,40 @@ function attachActions(root) {
       navigate(el.getAttribute('data-nav'));
     });
   });
+}
+
+function maybeDumpRender(hash, html) {
+  // Omogući dump tako što ćeš u konzoli uraditi localStorage.setItem('ca_debug_dump','1')
+  const isOn = localStorage.getItem(DEBUG_DUMP_KEY) === '1';
+  if (!isOn) return;
+  const text = `hash: ${hash}\n\n${html}`;
+  window.__lastRenderHtml = text;
+  try { localStorage.setItem('ca_render_dump', text); } catch (_) {}
+
+  let link = document.getElementById('renderDumpLink');
+  if (!link) {
+    link = document.createElement('a');
+    link.id = 'renderDumpLink';
+    link.textContent = 'Preuzmi render dump';
+    link.style.position = 'fixed';
+    link.style.bottom = '8px';
+    link.style.right = '8px';
+    link.style.zIndex = '9999';
+    link.style.background = '#111';
+    link.style.color = '#fff';
+    link.style.padding = '6px 10px';
+    link.style.borderRadius = '4px';
+    link.style.fontSize = '12px';
+    link.style.textDecoration = 'none';
+    document.body.appendChild(link);
+  }
+
+  if (link._blobUrl) {
+    URL.revokeObjectURL(link._blobUrl);
+  }
+  const blob = new Blob([text], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  link.href = url;
+  link.download = 'render-dump.txt';
+  link._blobUrl = url;
 }

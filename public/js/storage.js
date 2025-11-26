@@ -1,3 +1,13 @@
+import {
+  firestore,
+  collection,
+  getDocs,
+  setDoc,
+  deleteDoc,
+  doc,
+  serverTimestamp,
+} from './firebaseClient.js';
+
 const LS = {
   users: 'ca_users',
   problems: 'ca_problems',
@@ -7,78 +17,187 @@ const LS = {
   tests: 'ca_tests',
 };
 
-function readJson(key, fallback) {
+const COLLECTIONS = {
+  users: 'users',
+  problems: 'problems',
+  contests: 'contests',
+  submissions: 'submissions',
+  tests: 'tests',
+  sessions: 'sessions',
+};
+
+const state = {
+  users: [],
+  problems: [],
+  contests: [],
+  submissions: [],
+  tests: [],
+};
+
+let bridgeInstalled = false;
+let seedDone = false;
+let currentSessionHandle = null;
+
+function safeParse(value, fallback) {
   try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw);
+    return value ? JSON.parse(value) : fallback;
   } catch (e) {
-    // ako je localStorage polomljen, kreni od podrazumevanih vrednosti
-    localStorage.removeItem(key);
     return fallback;
   }
 }
 
-export function ensureSeed() {
+function readJson(key, fallback) {
+  return safeParse(localStorage.getItem(key), fallback);
+}
+
+async function fetchCollection(name) {
+  const snap = await getDocs(collection(firestore, name));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+async function replaceCollection(name, items, idField) {
+  const snap = await getDocs(collection(firestore, name));
+  const existing = new Set(snap.docs.map((d) => d.id));
+  const incoming = new Set();
+  await Promise.all(
+    (items || []).map(async (item) => {
+      const genId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.floor(Math.random()*1000));
+      const id = String(item[idField] || item.id || genId);
+      incoming.add(id);
+      await setDoc(doc(firestore, name, id), { ...item, id });
+    })
+  );
+  const toDelete = [...existing].filter((id) => !incoming.has(id));
+  await Promise.all(toDelete.map((id) => deleteDoc(doc(firestore, name, id))));
+}
+
+async function seedIfEmpty() {
+  const tasks = [];
   const F = fallbacks;
+  if (!state.problems.length) tasks.push(replaceCollection(COLLECTIONS.problems, F.problems, 'id'));
+  if (!state.contests.length) tasks.push(replaceCollection(COLLECTIONS.contests, F.contests, 'id'));
+  if (!state.users.length) tasks.push(replaceCollection(COLLECTIONS.users, withDefaultSystemUsers(F.users), 'handle'));
+  if (!state.tests.length) tasks.push(replaceCollection(COLLECTIONS.tests, withDefaultTests([], F.tests), 'id'));
+  if (!state.submissions.length) tasks.push(replaceCollection(COLLECTIONS.submissions, [], 'id'));
+  if (tasks.length) {
+    await Promise.all(tasks);
+    await loadFromFirestore();
+  }
+}
 
-  const ensure = (key, url, fallback, transform = (v)=>v) => {
-    const setVal = (val) => localStorage.setItem(key, JSON.stringify(transform(val)));
-    if (localStorage.getItem(key)) return;
-    setVal(fallback);
-    if (typeof fetch === 'function') {
-      fetch(url)
-        .then(r => {
-          if (!r.ok) throw new Error('Failed to load '+url);
-          return r.json();
-        })
-        .then(data => setVal(data))
-        .catch(()=>{ /* fallback already set */ });
-    }
+async function loadFromFirestore() {
+  const [users, problems, contests, submissions, tests] = await Promise.all([
+    fetchCollection(COLLECTIONS.users),
+    fetchCollection(COLLECTIONS.problems),
+    fetchCollection(COLLECTIONS.contests),
+    fetchCollection(COLLECTIONS.submissions),
+    fetchCollection(COLLECTIONS.tests),
+  ]);
+  state.users = withDefaultSystemUsers(users);
+  state.problems = problems;
+  state.contests = contests;
+  state.submissions = submissions;
+  state.tests = withDefaultTests(tests, fallbacks.tests);
+
+  localStorage.setItem(LS.users, JSON.stringify(state.users));
+  localStorage.setItem(LS.problems, JSON.stringify(state.problems));
+  localStorage.setItem(LS.contests, JSON.stringify(state.contests));
+  localStorage.setItem(LS.submissions, JSON.stringify(state.submissions));
+  localStorage.setItem(LS.tests, JSON.stringify(state.tests));
+}
+
+function installStorageBridge() {
+  if (bridgeInstalled) return;
+  bridgeInstalled = true;
+  const originalSet = localStorage.setItem.bind(localStorage);
+  const originalRemove = localStorage.removeItem.bind(localStorage);
+  localStorage.setItem = (key, value) => {
+    originalSet(key, value);
+    void mirrorSet(key, value);
   };
+  localStorage.removeItem = (key) => {
+    originalRemove(key);
+    void mirrorRemove(key);
+  };
+}
 
-  ensure(LS.problems, 'data/problems.json', F.problems);
-  ensure(LS.contests, 'data/contests.json', F.contests);
-  ensure(LS.users, 'data/users.json', F.users, withDefaultSystemUsers);
-
-  if (!localStorage.getItem(LS.submissions)) {
-    localStorage.setItem(LS.submissions, JSON.stringify([]));
+async function mirrorSet(key, value) {
+  if (key === LS.users) {
+    state.users = withDefaultSystemUsers(safeParse(value, []));
+    return replaceCollection(COLLECTIONS.users, state.users, 'handle');
   }
-  if (!localStorage.getItem(LS.tests)) {
-    localStorage.setItem(LS.tests, JSON.stringify(F.tests));
+  if (key === LS.problems) {
+    state.problems = safeParse(value, []);
+    return replaceCollection(COLLECTIONS.problems, state.problems, 'id');
   }
+  if (key === LS.contests) {
+    state.contests = safeParse(value, []);
+    return replaceCollection(COLLECTIONS.contests, state.contests, 'id');
+  }
+  if (key === LS.submissions) {
+    state.submissions = safeParse(value, []);
+    return replaceCollection(COLLECTIONS.submissions, state.submissions, 'id');
+  }
+  if (key === LS.tests) {
+    state.tests = withDefaultTests(safeParse(value, []), fallbacks.tests);
+    return replaceCollection(COLLECTIONS.tests, state.tests, 'id');
+  }
+  if (key === LS.session) {
+    const sess = safeParse(value, null);
+    currentSessionHandle = sess?.handle || null;
+    if (sess?.handle) {
+      await setDoc(doc(firestore, COLLECTIONS.sessions, sess.handle), {
+        handle: sess.handle,
+        updatedAt: serverTimestamp(),
+      });
+    }
+  }
+}
 
-  // Uvek dodaj skrivene sistemske naloge (admin/gost) i kad postoje lokalni korisnici.
-  db.saveUsers(withDefaultSystemUsers(db.users()));
-  // Uvek ubaci podrazumevane testove ako fale u lokalnoj memoriji.
-  db.saveTests(withDefaultTests(db.tests(), F.tests));
-  return Promise.resolve();
+async function mirrorRemove(key) {
+  if (key === LS.session) {
+    if (currentSessionHandle) {
+      await deleteDoc(doc(firestore, COLLECTIONS.sessions, currentSessionHandle)).catch(() => {});
+    }
+    currentSessionHandle = null;
+  }
+}
+
+export async function ensureSeed() {
+  if (seedDone) return;
+  await loadFromFirestore();
+  await seedIfEmpty();
+  const storedSession = safeParse(localStorage.getItem(LS.session), null);
+  currentSessionHandle = storedSession?.handle || null;
+  installStorageBridge();
+  if (storedSession) void mirrorSet(LS.session, JSON.stringify(storedSession));
+  seedDone = true;
 }
 
 export const db = {
-  users() { return readJson(LS.users, []); },
+  users() { return state.users; },
   saveUsers(v){ localStorage.setItem(LS.users, JSON.stringify(v)); },
 
-  problems() { return readJson(LS.problems, []); },
+  problems() { return state.problems; },
   saveProblems(v){ localStorage.setItem(LS.problems, JSON.stringify(v)); },
 
-  contests() { return readJson(LS.contests, []); },
+  contests() { return state.contests; },
   saveContests(v){ localStorage.setItem(LS.contests, JSON.stringify(v)); },
 
-  submissions(){ return readJson(LS.submissions, []); },
+  submissions(){ return state.submissions; },
   saveSubmissions(v){ localStorage.setItem(LS.submissions, JSON.stringify(v)); },
 
-  session(){ return readJson(LS.session, null); },
+  session(){ return currentSessionHandle ? { handle: currentSessionHandle } : null; },
   saveSession(v){ localStorage.setItem(LS.session, JSON.stringify(v)); },
 
-  tests(){ return readJson(LS.tests, []); },
+  tests(){ return state.tests; },
   saveTests(v){ localStorage.setItem(LS.tests, JSON.stringify(v)); },
 };
 
-export function currentUser(){ return db.session(); }
+export function currentUser(){ return findUser(db.session()?.handle || ''); }
 export function requireAuth(){ if(!currentUser()) location.hash = '#/login'; }
 
-export function findUser(handle){ return db.users().find(u=>u.handle.toLowerCase()===handle.toLowerCase()); }
+export function findUser(handle){ return state.users.find(u=>u.handle.toLowerCase()===handle.toLowerCase()); }
 export function isAdminHandle(handle){ const u = findUser(handle||''); return !!u?.isAdmin; }
 
 function withDefaultSystemUsers(list){
