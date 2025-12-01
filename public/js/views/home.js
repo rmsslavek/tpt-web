@@ -4,42 +4,47 @@ export function HomeView(){
   const problems = db.problems().slice(0,5);
   const contests = db.contests().slice(0,3);
   return `
-  <section class="grid cols-2">
-    <div class="panel">
-      <h2>Dobrodošli u CodeArena</h2>
-      <p class="muted">Lokalni demo klon osnovnih funkcionalnosti platforme za takmičenja iz programiranja. Nije povezan sa Codeforces i koristi lokalno čuvanje podataka.</p>
-      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));">
-        <a class="term-btn primary" href="#/problemset" data-text="open problemset" data-after="Spremno">
-          <canvas class="bits"></canvas>
-          <div class="line">
-            <span class="prompt">$</span>
-            <span class="output">open problemset</span>
-            <span class="caret" aria-hidden="true"></span>
+  <section class="grid hero-grid">
+    <div class="panel hero-panel">
+      <div class="hero-inner">
+        <div class="hero-copy">
+          <p class="eyebrow">CodeArena demo</p>
+          <h2>Dobrodošli u CodeArena</h2>
+          <p class="muted">Lokalni demo klon osnovnih funkcionalnosti platforme za takmičenja iz programiranja. Nije povezan sa Codeforces i koristi lokalno čuvanje podataka.</p>
+          <div class="muted hero-test">
+            <button class="btn ghost" id="testFirestoreBtn" type="button">Test Firestore upis</button>
+            <span id="testFirestoreStatus" class="hero-test-status"></span>
           </div>
-          <div class="subline"></div>
-        </a>
-        <a class="term-btn" href="#/contests" data-text="open contests" data-after="Učitano">
-          <canvas class="bits"></canvas>
-          <div class="line">
-            <span class="prompt">$</span>
-            <span class="output">open contests</span>
-            <span class="caret" aria-hidden="true"></span>
-          </div>
-          <div class="subline"></div>
-        </a>
-        <a class="term-btn" href="#/tests" data-text="open tests" data-after="Prikazano">
-          <canvas class="bits"></canvas>
-          <div class="line">
-            <span class="prompt">$</span>
-            <span class="output">open tests</span>
-            <span class="caret" aria-hidden="true"></span>
-          </div>
-          <div class="subline"></div>
-        </a>
-      </div>
-      <div class="muted" style="margin-top:12px">
-        <button class="btn ghost" id="testFirestoreBtn" type="button">Test Firestore upis</button>
-        <span id="testFirestoreStatus" style="margin-left:8px;font-size:12px;"></span>
+        </div>
+        <div class="hero-actions">
+          <a class="term-btn primary" href="#/problemset" data-text="open problemset" data-after="Spremno">
+            <canvas class="bits"></canvas>
+            <div class="line">
+              <span class="prompt">$</span>
+              <span class="output">open problemset</span>
+              <span class="caret" aria-hidden="true"></span>
+            </div>
+            <div class="subline"></div>
+          </a>
+          <a class="term-btn" href="#/contests" data-text="open contests" data-after="Učitano">
+            <canvas class="bits"></canvas>
+            <div class="line">
+              <span class="prompt">$</span>
+              <span class="output">open contests</span>
+              <span class="caret" aria-hidden="true"></span>
+            </div>
+            <div class="subline"></div>
+          </a>
+          <a class="term-btn" href="#/tests" data-text="open tests" data-after="Prikazano">
+            <canvas class="bits"></canvas>
+            <div class="line">
+              <span class="prompt">$</span>
+              <span class="output">open tests</span>
+              <span class="caret" aria-hidden="true"></span>
+            </div>
+            <div class="subline"></div>
+          </a>
+        </div>
       </div>
       <script type="module">
         import { firestore, collection, addDoc, serverTimestamp } from './js/firebaseClient.js';
@@ -69,7 +74,7 @@ export function HomeView(){
         }
       </script>
     </div>
-    <div class="panel">
+    <div class="panel news-panel">
       <h3>Uskoro počinje</h3>
       <ul>
         ${contests.map(c=>`<li><a href="#/contest/${c.id}">${c.title}</a> <span class="muted">• ${new Date(c.startTime).toLocaleString()}</span></li>`).join('')}

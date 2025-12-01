@@ -51,3 +51,18 @@ export {
   where,
   writeBatch,
 };
+
+// Omogući pristup Firestore helperima i u inline skriptama (npr. test attempts)
+if (typeof window !== 'undefined') {
+  window.__firestoreTools = {
+    firestore,
+    collection,
+    addDoc,
+    deleteDoc,
+    doc,
+    getDocs,
+    query,
+    where,
+    serverTimestamp,
+  };
+}

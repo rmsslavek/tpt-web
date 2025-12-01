@@ -29,7 +29,8 @@ async function bootstrap(){
     delay(4000).then(()=>diag('ensureSeed timeout (nastavljamo render bez cekanja)')),
   ]);
 
-  ensureAdminAccountPrompt();
+  // Pusti UI da krene, ali prompt za admina tek kad seed završi ili propadne
+  seedPromise.then(()=>ensureAdminAccountPrompt()).catch(()=>ensureAdminAccountPrompt());
 
   const navbarEl = document.getElementById('navbar');
   const view = document.getElementById('view');

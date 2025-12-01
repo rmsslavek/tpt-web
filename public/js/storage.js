@@ -37,6 +37,7 @@ const state = {
 let bridgeInstalled = false;
 let seedDone = false;
 let currentSessionHandle = null;
+let lastFetchedCounts = null;
 
 function safeParse(value, fallback) {
   try {
@@ -74,11 +75,13 @@ async function replaceCollection(name, items, idField) {
 async function seedIfEmpty() {
   const tasks = [];
   const F = fallbacks;
-  if (!state.problems.length) tasks.push(replaceCollection(COLLECTIONS.problems, F.problems, 'id'));
-  if (!state.contests.length) tasks.push(replaceCollection(COLLECTIONS.contests, F.contests, 'id'));
-  if (!state.users.length) tasks.push(replaceCollection(COLLECTIONS.users, withDefaultSystemUsers(F.users), 'handle'));
-  if (!state.tests.length) tasks.push(replaceCollection(COLLECTIONS.tests, withDefaultTests([], F.tests), 'id'));
-  if (!state.submissions.length) tasks.push(replaceCollection(COLLECTIONS.submissions, [], 'id'));
+  const fetched = lastFetchedCounts || {};
+  const isEmpty = (key, stateCount) => (typeof fetched[key] === 'number' ? fetched[key] === 0 : stateCount === 0);
+  if (isEmpty('problems', state.problems.length)) tasks.push(replaceCollection(COLLECTIONS.problems, F.problems, 'id'));
+  if (isEmpty('contests', state.contests.length)) tasks.push(replaceCollection(COLLECTIONS.contests, F.contests, 'id'));
+  if (isEmpty('users', state.users.length)) tasks.push(replaceCollection(COLLECTIONS.users, withDefaultSystemUsers(F.users), 'handle'));
+  if (isEmpty('tests', state.tests.length)) tasks.push(replaceCollection(COLLECTIONS.tests, withDefaultTests([], F.tests), 'id'));
+  if (isEmpty('submissions', state.submissions.length)) tasks.push(replaceCollection(COLLECTIONS.submissions, [], 'id'));
   if (tasks.length) {
     await Promise.all(tasks);
     await loadFromFirestore();
@@ -93,6 +96,13 @@ async function loadFromFirestore() {
     fetchCollection(COLLECTIONS.submissions),
     fetchCollection(COLLECTIONS.tests),
   ]);
+  lastFetchedCounts = {
+    users: users.length,
+    problems: problems.length,
+    contests: contests.length,
+    submissions: submissions.length,
+    tests: tests.length,
+  };
   state.users = withDefaultSystemUsers(users);
   state.problems = problems;
   state.contests = contests;

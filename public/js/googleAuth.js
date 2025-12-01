@@ -48,6 +48,7 @@ async function initAndRender(container){
     container.innerHTML = '<div class="muted">Podesite GOOGLE_CLIENT_ID u js/config.js</div>';
     return;
   }
+  container.classList.add('google-btn-wrap');
   try{
     await ensureGisReady();
     window.google.accounts.id.initialize({
@@ -65,10 +66,16 @@ async function initAndRender(container){
     window.google.accounts.id.renderButton(container, {
       theme: 'outline',
       size: 'large',
-      shape: 'rectangular',
-      width: 280,
+      shape: 'pill',
+      width: 260,
       text: 'continue_with'
     });
+    // Pre-stilizuj dugme da liči na naša .btn
+    const btn = container.querySelector('div[role=button], button');
+    if(btn){
+      btn.classList.add('google-btn-custom');
+      btn.removeAttribute('style');
+    }
   }catch(e){
     container.innerHTML = '<div class="muted">Google prijava nije dostupna.</div>';
   }
@@ -83,4 +90,3 @@ export function renderGoogleButtonInto(containerId){
 
 // Pristup kroz window radi inline skripti
 window.renderGoogleButtonInto = renderGoogleButtonInto;
-
