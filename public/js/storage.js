@@ -51,6 +51,10 @@ function readJson(key, fallback) {
   return safeParse(localStorage.getItem(key), fallback);
 }
 
+function normalizeProblem(p){
+  return { ...p, tests: Array.isArray(p.tests) ? p.tests : [] };
+}
+
 async function fetchCollection(name) {
   const snap = await getDocs(collection(firestore, name));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -104,7 +108,7 @@ async function loadFromFirestore() {
     tests: tests.length,
   };
   state.users = withDefaultSystemUsers(users);
-  state.problems = problems;
+  state.problems = problems.map(normalizeProblem);
   state.contests = contests;
   state.submissions = submissions;
   state.tests = withDefaultTests(tests, fallbacks.tests);
@@ -270,6 +274,11 @@ const fallbacks = {
       samples: [
         { input: '2 3\n', output: '5\n' },
         { input: '-10 7\n', output: '-3\n' }
+      ],
+      tests: [
+        { id: 'T1', in: '2 3\n', out: '5\n' },
+        { id: 'T2', in: '-10 7\n', out: '-3\n' },
+        { id: 'T3', in: '0 0\n', out: '0\n' }
       ]
     },
     {
@@ -283,6 +292,11 @@ const fallbacks = {
       samples: [
         { input: 'hello world\n', output: '2\n' },
         { input: '  a   bb  ccc \n', output: '3\n' }
+      ],
+      tests: [
+        { id: 'T1', in: 'hello world\n', out: '2\n' },
+        { id: 'T2', in: '  a   bb  ccc \n', out: '3\n' },
+        { id: 'T3', in: 'jedan dva tri\ncetiri\n', out: '4\n' }
       ]
     },
     {
@@ -296,6 +310,11 @@ const fallbacks = {
       samples: [
         { input: '5\n1 9 3 9 5\n', output: '9\n' },
         { input: '3\n-1 -5 -3\n', output: '-1\n' }
+      ],
+      tests: [
+        { id: 'T1', in: '5\n1 9 3 9 5\n', out: '9\n' },
+        { id: 'T2', in: '3\n-1 -5 -3\n', out: '-1\n' },
+        { id: 'T3', in: '4\n100 2 3 4\n', out: '100\n' }
       ]
     },
   ],

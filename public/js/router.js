@@ -52,6 +52,10 @@ function runInlineScripts(root) {
 }
 
 async function render() {
+  // Ako je URL dobio query (npr. iz submit-a), skloni ga da ne bi lomio inline skripte
+  if (location.search) {
+    history.replaceState(null, '', location.origin + location.pathname + location.hash);
+  }
   const h = location.hash || '#/';
   for (const r of routes) {
     const m = h.match(r.path);

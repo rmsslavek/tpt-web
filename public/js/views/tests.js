@@ -240,11 +240,11 @@ export function TestRunView({ params }){
   const me = db.session();
   const user = me ? db.users().find(u=>u.handle===me.handle) : null;
   if(!me){
-    return `<div class="panel">Morate biti prijavljeni da biste rešavali test. <a href="#/login">Prijavite se</a>.</div>`;
+    return `<div class="panel">Morate biti prijavljeni da biste resavali test. <a href="#/login">Prijavite se</a>.</div>`;
   }
   const test = db.tests().find(t=>t.id===id);
   if(!test){
-    return `<div class="panel">Test nije pronađen. <a href="#/tests">Nazad</a></div>`;
+    return `<div class="panel">Test nije pronadjen. <a href="#/tests">Nazad</a></div>`;
   }
   return `
   <section id="takeWrap" class="panel" style="max-width:900px;margin:0 auto">
@@ -272,18 +272,25 @@ export function TestRunView({ params }){
         </div>
       `).join('')}
       <div id="actionRow" style="display:flex;justify-content:flex-end;gap:.6rem;align-items:center">
-        <span class="muted">Vreme ograničeno na ${Math.max(1, Math.ceil(test.durationSeconds/60))} min</span>
-        <button class="btn primary" type="submit">Završi test</button>
+        <span class="muted">Vreme ograniceno na ${Math.max(1, Math.ceil(test.durationSeconds/60))} min</span>
+        <button class="btn primary" type="submit">Zavrsi test</button>
         <a class="btn" href="#/tests">Nazad</a>
       </div>
     </form>
     <div id="result" class="panel" style="display:none;margin-top:1rem"></div>
   </section>
-  <script>
-    (function(){
-      const test = ${JSON.stringify(test)};
-      const sessionUser = ${JSON.stringify(user||null)};
-      const emailConfig = ${JSON.stringify(EMAIL_API_CONFIG || {})};
+  <script id="testRunData" type="application/json">${JSON.stringify({ test, user, emailConfig: EMAIL_API_CONFIG || {} }).replace(/</g,'\\u003c')}</script>
+  <script type="module">
+    (()=> {
+      if (location.search) {
+        history.replaceState(null, '', location.origin + location.pathname + location.hash);
+      }
+      const dataEl = document.getElementById('testRunData');
+      let payload = {};
+      try { payload = JSON.parse(dataEl?.textContent || '{}'); } catch(_){ }
+      const test = payload.test || {};
+      const sessionUser = payload.user || null;
+      const emailConfig = payload.emailConfig || {};
       const loadAttempts = ()=>JSON.parse(localStorage.getItem('ca_test_attempts')||'[]');
       const saveAttempts = (list)=>localStorage.setItem('ca_test_attempts', JSON.stringify(list));
       const timerEl = document.getElementById('timer');
@@ -297,12 +304,13 @@ export function TestRunView({ params }){
         const r = String(s%60).padStart(2,'0');
         return m+':'+r;
       };
-      let left = test.durationSeconds;
+      let left = Number(test.durationSeconds)||0;
       let finished = false;
       let tick = null;
 
       const tools = window.__firestoreTools || {};
       const handleVal = (sessionUser?.handle || '').toLowerCase();
+      const setTimer = () => { if(timerEl) timerEl.textContent = fmtLocal(left); };
 
       async function fetchAttemptsFs(){
         if(!tools.firestore || !tools.collection || !tools.getDocs || !tools.query || !tools.where) return [];
@@ -315,7 +323,7 @@ export function TestRunView({ params }){
           const snap = await tools.getDocs(qref);
           return snap.docs.map(d=>({ id:d.id, ...d.data() }));
         }catch(err){
-          console.warn('Ne mogu da pročitam test_attempts', err);
+          console.warn('Ne mogu da procitam test_attempts', err);
           return [];
         }
       }
@@ -326,15 +334,16 @@ export function TestRunView({ params }){
           if(existing.length){
             if(wrap){
               wrap.innerHTML = '<div class="panel" style="max-width:700px;margin:0 auto">Vec ste radili ovaj test. Rezultat: '
-                + (existing[0].correct||0) + ' / ' + (existing[0].total||test.questions.length)
+                + (existing[0].correct||0) + ' / ' + (existing[0].total||test.questions?.length||0)
                 + '. <p class="muted">Samo administratori mogu ponovo pokretati testove.</p></div>';
             }
             return;
           }
         }
+        setTimer();
         tick = setInterval(()=>{
           left -= 1;
-          timerEl.textContent = fmtLocal(left);
+          setTimer();
           if(left<=0){
             clearInterval(tick);
             grade();
@@ -354,15 +363,14 @@ export function TestRunView({ params }){
         if(!form) return;
         const data = new FormData(form);
         let correct = 0;
-        test.questions.forEach((q,qi)=>{
+        (test.questions||[]).forEach((q,qi)=>{
           const picked = data.get('q'+qi);
           if(picked!==null && Number(picked)===q.answer) correct++;
         });
-        const total = test.questions.length;
+        const total = (test.questions||[]).length;
         form.querySelectorAll('input,button,select').forEach(el=> el.disabled=true);
 
-        // Snimi pokušaj (blokira ponavljanje za ne-admin)
-        const answers = test.questions.map((q,qi)=>{
+        const answers = (test.questions||[]).map((q,qi)=>{
           const picked = data.get('q'+qi);
           return {
             isCode: !!q.isCode,
@@ -374,18 +382,17 @@ export function TestRunView({ params }){
           };
         });
         const attempts = loadAttempts();
-        const handleVal = (sessionUser?.handle || me?.handle || 'guest').toLowerCase();
+        const handleValLocal = (sessionUser?.handle || 'guest').toLowerCase();
         attempts.push({
           testId: test.id,
           testTitle: test.title,
-          handle: handleVal,
+          handle: handleValLocal,
           correct,
           total,
           ts: Date.now(),
           answers,
         });
         saveAttempts(attempts);
-        // Upisi i u Firestore (best-effort)
         try{
           const tools = window.__firestoreTools || {};
           if(!tools.firestore || !tools.addDoc || !tools.collection || !tools.serverTimestamp){
@@ -394,14 +401,14 @@ export function TestRunView({ params }){
           await tools.addDoc(tools.collection(tools.firestore, 'test_attempts'), {
             testId: test.id,
             testTitle: test.title,
-            handle: handleVal,
+            handle: handleValLocal,
             correct,
             total,
             answers,
             createdAt: tools.serverTimestamp(),
             clientTs: Date.now(),
           });
-          if(emailStatus) emailStatus.textContent = 'Pokušaj sačuvan (Firestore).';
+          if(emailStatus) emailStatus.textContent = 'Pokusaj sacuvan (Firestore).';
         }catch(err){
           console.warn('Firestore upis za test_attempts nije uspeo', err);
           if(emailStatus) emailStatus.textContent = 'Upis u bazu nije uspeo: '+(err?.message||err);
@@ -410,15 +417,61 @@ export function TestRunView({ params }){
         result.style.display='block';
         result.innerHTML = '<h3>Rezultat</h3><p>Tacnih: <b>'+correct+'</b> od '+total+'</p>';
 
-        // Email slanje privremeno obustavljeno
-        if(emailStatus) emailStatus.textContent = 'Slanje emaila je privremeno pauzirano.';
-        return;
+        const targetEmail = test.authorEmail || emailConfig.to || '';
+        if(!targetEmail){
+          if(emailStatus) emailStatus.textContent = 'Nema definisanog primaoca rezultata.';
+          return;
+        }
+        if(emailStatus) emailStatus.textContent = 'Saljem rezultat...';
+        try{
+          const lines = [];
+          lines.push('Rezultat testa: '+test.title);
+          lines.push('Kandidat: '+(sessionUser?.handle||handleValLocal||'anonimno'));
+          lines.push('Tacnih: '+correct+' od '+total);
+          lines.push('');
+          answers.forEach((a,i)=>{
+            const qLabel = a.isCode ? 'CODE:\n'+(a.text||'') : (a.text||'');
+            lines.push((i+1)+'. '+qLabel);
+            lines.push('  odgovor: '+(a.pickedText||'nije odgovoreno'));
+            lines.push('  tacno: '+(a.correctText||''));
+            lines.push('');
+          });
+          const message = lines.join('\n');
+          const hasEndpoint = emailConfig?.endpoint && !String(emailConfig.endpoint).includes('REPLACE');
+          if(hasEndpoint){
+            const payload = {
+              email: sessionUser?.email || emailConfig.fromEmail || 'no-reply@codearena.local',
+              name: emailConfig.fromName || 'CodeArena',
+              subject: 'Rezultat testa: '+test.title,
+              message,
+              to: targetEmail,
+            };
+            const res = await fetch(emailConfig.endpoint, {
+              method:'POST',
+              headers:{ 'Content-Type':'application/json' },
+              body: JSON.stringify(payload),
+            });
+            const dataRes = await res.json().catch(()=> ({}));
+            if(!res.ok){
+              throw new Error(dataRes?.error || dataRes?.message || ('Email API error '+res.status));
+            }
+            if(emailStatus) emailStatus.textContent = 'Email poslat.';
+          }else{
+            const body = encodeURIComponent(message);
+            const subj = encodeURIComponent('Rezultat testa: '+test.title);
+            window.location.href = 'mailto:'+encodeURIComponent(targetEmail)+'?subject='+subj+'&body='+body;
+            if(emailStatus) emailStatus.textContent = 'Otvoren email klijent (mailto).';
+          }
+        }catch(err){
+          console.warn('Email slanje nije uspelo', err);
+          const reason = err?.message || 'Nepoznata greska';
+          if(emailStatus) emailStatus.textContent = 'Slanje emaila nije uspelo: '+reason;
+        }
       }
 
     })();
   </script>`;
 }
-
 function fmt(sec){
   const s = Math.max(0, Math.floor(sec));
   const m = String(Math.floor(s/60)).padStart(2,'0');
@@ -695,3 +748,4 @@ function renderTestForm({ user, test, mode }){
     })();
   </script>`;
 }
+
