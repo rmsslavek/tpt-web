@@ -38,6 +38,7 @@ let bridgeInstalled = false;
 let seedDone = false;
 let currentSessionHandle = null;
 let lastFetchedCounts = null;
+let firestoreOnline = true;
 
 function safeParse(value, fallback) {
   try {
@@ -49,6 +50,14 @@ function safeParse(value, fallback) {
 
 function readJson(key, fallback) {
   return safeParse(localStorage.getItem(key), fallback);
+}
+
+function loadLocalState(){
+  state.users = withDefaultSystemUsers(readJson(LS.users, fallbacks.users));
+  state.problems = (readJson(LS.problems, fallbacks.problems) || []).map(normalizeProblem);
+  state.contests = readJson(LS.contests, fallbacks.contests || []);
+  state.submissions = readJson(LS.submissions, []);
+  state.tests = withDefaultTests(readJson(LS.tests, fallbacks.tests || []), fallbacks.tests);
 }
 
 function normalizeProblem(p){
@@ -136,6 +145,7 @@ function installStorageBridge() {
 }
 
 async function mirrorSet(key, value) {
+  if (!firestoreOnline) return;
   if (key === LS.users) {
     state.users = withDefaultSystemUsers(safeParse(value, []));
     return replaceCollection(COLLECTIONS.users, state.users, 'handle');
@@ -169,6 +179,7 @@ async function mirrorSet(key, value) {
 }
 
 async function mirrorRemove(key) {
+  if (!firestoreOnline) return;
   if (key === LS.session) {
     if (currentSessionHandle) {
       await deleteDoc(doc(firestore, COLLECTIONS.sessions, currentSessionHandle)).catch(() => {});
@@ -179,8 +190,14 @@ async function mirrorRemove(key) {
 
 export async function ensureSeed() {
   if (seedDone) return;
-  await loadFromFirestore();
-  await seedIfEmpty();
+  try{
+    await loadFromFirestore();
+    await seedIfEmpty();
+  }catch(err){
+    console.warn('Firestore init failed, using local data only', err);
+    firestoreOnline = false;
+    loadLocalState();
+  }
   const storedSession = safeParse(localStorage.getItem(LS.session), null);
   currentSessionHandle = storedSession?.handle || null;
   installStorageBridge();

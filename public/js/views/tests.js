@@ -280,197 +280,7 @@ export function TestRunView({ params }){
     <div id="result" class="panel" style="display:none;margin-top:1rem"></div>
   </section>
   <script id="testRunData" type="application/json">${JSON.stringify({ test, user, emailConfig: EMAIL_API_CONFIG || {} }).replace(/</g,'\\u003c')}</script>
-  <script type="module">
-    (()=> {
-      if (location.search) {
-        history.replaceState(null, '', location.origin + location.pathname + location.hash);
-      }
-      const dataEl = document.getElementById('testRunData');
-      let payload = {};
-      try { payload = JSON.parse(dataEl?.textContent || '{}'); } catch(_){ }
-      const test = payload.test || {};
-      const sessionUser = payload.user || null;
-      const emailConfig = payload.emailConfig || {};
-      const loadAttempts = ()=>JSON.parse(localStorage.getItem('ca_test_attempts')||'[]');
-      const saveAttempts = (list)=>localStorage.setItem('ca_test_attempts', JSON.stringify(list));
-      const timerEl = document.getElementById('timer');
-      const wrap = document.getElementById('takeWrap');
-      const form = document.getElementById('takeForm');
-      const result = document.getElementById('result');
-      const emailStatus = document.getElementById('emailStatus');
-      const fmtLocal = (sec)=>{
-        const s = Math.max(0, Math.floor(sec));
-        const m = String(Math.floor(s/60)).padStart(2,'0');
-        const r = String(s%60).padStart(2,'0');
-        return m+':'+r;
-      };
-      let left = Number(test.durationSeconds)||0;
-      let finished = false;
-      let tick = null;
-
-      const tools = window.__firestoreTools || {};
-      const handleVal = (sessionUser?.handle || '').toLowerCase();
-      const setTimer = () => { if(timerEl) timerEl.textContent = fmtLocal(left); };
-
-      async function fetchAttemptsFs(){
-        if(!tools.firestore || !tools.collection || !tools.getDocs || !tools.query || !tools.where) return [];
-        try{
-          const qref = tools.query(
-            tools.collection(tools.firestore, 'test_attempts'),
-            tools.where('handle','==', handleVal),
-            tools.where('testId','==', test.id)
-          );
-          const snap = await tools.getDocs(qref);
-          return snap.docs.map(d=>({ id:d.id, ...d.data() }));
-        }catch(err){
-          console.warn('Ne mogu da procitam test_attempts', err);
-          return [];
-        }
-      }
-
-      async function initRun(){
-        if(handleVal && !sessionUser?.isAdmin){
-          const existing = await fetchAttemptsFs();
-          if(existing.length){
-            if(wrap){
-              wrap.innerHTML = '<div class="panel" style="max-width:700px;margin:0 auto">Vec ste radili ovaj test. Rezultat: '
-                + (existing[0].correct||0) + ' / ' + (existing[0].total||test.questions?.length||0)
-                + '. <p class="muted">Samo administratori mogu ponovo pokretati testove.</p></div>';
-            }
-            return;
-          }
-        }
-        setTimer();
-        tick = setInterval(()=>{
-          left -= 1;
-          setTimer();
-          if(left<=0){
-            clearInterval(tick);
-            grade();
-          }
-        },1000);
-        if(form){
-          form.addEventListener('submit', async (e)=>{ e.preventDefault(); await grade(); });
-        }
-      }
-
-      initRun();
-
-      async function grade(){
-        if(finished) return;
-        finished = true;
-        clearInterval(tick);
-        if(!form) return;
-        const data = new FormData(form);
-        let correct = 0;
-        (test.questions||[]).forEach((q,qi)=>{
-          const picked = data.get('q'+qi);
-          if(picked!==null && Number(picked)===q.answer) correct++;
-        });
-        const total = (test.questions||[]).length;
-        form.querySelectorAll('input,button,select').forEach(el=> el.disabled=true);
-
-        const answers = (test.questions||[]).map((q,qi)=>{
-          const picked = data.get('q'+qi);
-          return {
-            isCode: !!q.isCode,
-            text: q.isCode ? (q.code || q.text || '') : (q.text || ''),
-            picked: picked!==null ? Number(picked) : null,
-            pickedText: picked!==null ? q.options[Number(picked)] : 'nije odgovoreno',
-            correct: q.answer,
-            correctText: q.options[q.answer],
-          };
-        });
-        const attempts = loadAttempts();
-        const handleValLocal = (sessionUser?.handle || 'guest').toLowerCase();
-        attempts.push({
-          testId: test.id,
-          testTitle: test.title,
-          handle: handleValLocal,
-          correct,
-          total,
-          ts: Date.now(),
-          answers,
-        });
-        saveAttempts(attempts);
-        try{
-          const tools = window.__firestoreTools || {};
-          if(!tools.firestore || !tools.addDoc || !tools.collection || !tools.serverTimestamp){
-            throw new Error('Firestore helperi nisu dostupni u prozoru.');
-          }
-          await tools.addDoc(tools.collection(tools.firestore, 'test_attempts'), {
-            testId: test.id,
-            testTitle: test.title,
-            handle: handleValLocal,
-            correct,
-            total,
-            answers,
-            createdAt: tools.serverTimestamp(),
-            clientTs: Date.now(),
-          });
-          if(emailStatus) emailStatus.textContent = 'Pokusaj sacuvan (Firestore).';
-        }catch(err){
-          console.warn('Firestore upis za test_attempts nije uspeo', err);
-          if(emailStatus) emailStatus.textContent = 'Upis u bazu nije uspeo: '+(err?.message||err);
-        }
-
-        result.style.display='block';
-        result.innerHTML = '<h3>Rezultat</h3><p>Tacnih: <b>'+correct+'</b> od '+total+'</p>';
-
-        const targetEmail = test.authorEmail || emailConfig.to || '';
-        if(!targetEmail){
-          if(emailStatus) emailStatus.textContent = 'Nema definisanog primaoca rezultata.';
-          return;
-        }
-        if(emailStatus) emailStatus.textContent = 'Saljem rezultat...';
-        try{
-          const lines = [];
-          lines.push('Rezultat testa: '+test.title);
-          lines.push('Kandidat: '+(sessionUser?.handle||handleValLocal||'anonimno'));
-          lines.push('Tacnih: '+correct+' od '+total);
-          lines.push('');
-          answers.forEach((a,i)=>{
-            const qLabel = a.isCode ? 'CODE:\n'+(a.text||'') : (a.text||'');
-            lines.push((i+1)+'. '+qLabel);
-            lines.push('  odgovor: '+(a.pickedText||'nije odgovoreno'));
-            lines.push('  tacno: '+(a.correctText||''));
-            lines.push('');
-          });
-          const message = lines.join('\n');
-          const hasEndpoint = emailConfig?.endpoint && !String(emailConfig.endpoint).includes('REPLACE');
-          if(hasEndpoint){
-            const payload = {
-              email: sessionUser?.email || emailConfig.fromEmail || 'no-reply@codearena.local',
-              name: emailConfig.fromName || 'CodeArena',
-              subject: 'Rezultat testa: '+test.title,
-              message,
-              to: targetEmail,
-            };
-            const res = await fetch(emailConfig.endpoint, {
-              method:'POST',
-              headers:{ 'Content-Type':'application/json' },
-              body: JSON.stringify(payload),
-            });
-            const dataRes = await res.json().catch(()=> ({}));
-            if(!res.ok){
-              throw new Error(dataRes?.error || dataRes?.message || ('Email API error '+res.status));
-            }
-            if(emailStatus) emailStatus.textContent = 'Email poslat.';
-          }else{
-            const body = encodeURIComponent(message);
-            const subj = encodeURIComponent('Rezultat testa: '+test.title);
-            window.location.href = 'mailto:'+encodeURIComponent(targetEmail)+'?subject='+subj+'&body='+body;
-            if(emailStatus) emailStatus.textContent = 'Otvoren email klijent (mailto).';
-          }
-        }catch(err){
-          console.warn('Email slanje nije uspelo', err);
-          const reason = err?.message || 'Nepoznata greska';
-          if(emailStatus) emailStatus.textContent = 'Slanje emaila nije uspelo: '+reason;
-        }
-      }
-
-    })();
-  </script>`;
+  `;
 }
 function fmt(sec){
   const s = Math.max(0, Math.floor(sec));
@@ -503,6 +313,199 @@ export function TestEditView({ params }){
     return `<div class="panel">Test nije pronađen. <a href="#/tests">Nazad</a></div>`;
   }
   return renderTestForm({ user, test, mode:'edit' });
+}
+
+export function initTestRunPage({ root }){
+  if (location.search) {
+    history.replaceState(null, '', location.origin + location.pathname + location.hash);
+  }
+  const dataEl = root?.querySelector('#testRunData');
+  let payload = {};
+  try { payload = JSON.parse(dataEl?.textContent || '{}'); } catch(_){ }
+  const test = payload.test || {};
+  const sessionUser = payload.user || null;
+  const emailConfig = payload.emailConfig || {};
+  const loadAttempts = ()=>JSON.parse(localStorage.getItem('ca_test_attempts')||'[]');
+  const saveAttempts = (list)=>localStorage.setItem('ca_test_attempts', JSON.stringify(list));
+  const timerEl = root?.querySelector('#timer');
+  const wrap = root?.querySelector('#takeWrap');
+  const form = root?.querySelector('#takeForm');
+  const result = root?.querySelector('#result');
+  const emailStatus = root?.querySelector('#emailStatus');
+  const fmtLocal = (sec)=>{
+    const s = Math.max(0, Math.floor(sec));
+    const m = String(Math.floor(s/60)).padStart(2,'0');
+    const r = String(s%60).padStart(2,'0');
+    return m+':'+r;
+  };
+  let left = Number(test.durationSeconds)||0;
+  let finished = false;
+  let tick = null;
+
+  const tools = window.__firestoreTools || {};
+  const handleVal = (sessionUser?.handle || '').toLowerCase();
+  const setTimer = () => { if(timerEl) timerEl.textContent = fmtLocal(left); };
+
+  async function fetchAttemptsFs(){
+    if(!tools.firestore || !tools.collection || !tools.getDocs || !tools.query || !tools.where) return [];
+    try{
+      const qref = tools.query(
+        tools.collection(tools.firestore, 'test_attempts'),
+        tools.where('handle','==', handleVal),
+        tools.where('testId','==', test.id)
+      );
+      const snap = await tools.getDocs(qref);
+      return snap.docs.map(d=>({ id:d.id, ...d.data() }));
+    }catch(err){
+      console.warn('Ne mogu da procitam test_attempts', err);
+      return [];
+    }
+  }
+
+  async function initRun(){
+    if(handleVal && !sessionUser?.isAdmin){
+      const existing = await fetchAttemptsFs();
+      if(existing.length){
+        if(wrap){
+          wrap.innerHTML = '<div class="panel" style="max-width:700px;margin:0 auto">Vec ste radili ovaj test. Rezultat: '
+            + (existing[0].correct||0) + ' / ' + (existing[0].total||test.questions?.length||0)
+            + '. <p class="muted">Samo administratori mogu ponovo pokretati testove.</p></div>';
+        }
+        return;
+      }
+    }
+    setTimer();
+    tick = setInterval(()=>{
+      left -= 1;
+      setTimer();
+      if(left<=0){
+        clearInterval(tick);
+        grade();
+      }
+    },1000);
+    if(form){
+      form.addEventListener('submit', async (e)=>{ e.preventDefault(); await grade(); });
+    }
+  }
+
+  initRun();
+
+  async function grade(){
+    if(finished) return;
+    finished = true;
+    clearInterval(tick);
+    if(!form) return;
+    const data = new FormData(form);
+    let correct = 0;
+    (test.questions||[]).forEach((q,qi)=>{
+      const picked = data.get('q'+qi);
+      if(picked!==null && Number(picked)===q.answer) correct++;
+    });
+    const total = (test.questions||[]).length;
+    form.querySelectorAll('input,button,select').forEach(el=> el.disabled=true);
+
+    const answers = (test.questions||[]).map((q,qi)=>{
+      const picked = data.get('q'+qi);
+      return {
+        isCode: !!q.isCode,
+        text: q.isCode ? (q.code || q.text || '') : (q.text || ''),
+        picked: picked!==null ? Number(picked) : null,
+        pickedText: picked!==null ? q.options[Number(picked)] : 'nije odgovoreno',
+        correct: q.answer,
+        correctText: q.options[q.answer],
+      };
+    });
+    const attempts = loadAttempts();
+    const handleValLocal = (sessionUser?.handle || 'guest').toLowerCase();
+    attempts.push({
+      testId: test.id,
+      testTitle: test.title,
+      handle: handleValLocal,
+      correct,
+      total,
+      ts: Date.now(),
+      answers,
+    });
+    saveAttempts(attempts);
+    try{
+      const tools = window.__firestoreTools || {};
+      if(!tools.firestore || !tools.addDoc || !tools.collection || !tools.serverTimestamp){
+        throw new Error('Firestore helperi nisu dostupni u prozoru.');
+      }
+      await tools.addDoc(tools.collection(tools.firestore, 'test_attempts'), {
+        testId: test.id,
+        testTitle: test.title,
+        handle: handleValLocal,
+        correct,
+        total,
+        answers,
+        createdAt: tools.serverTimestamp(),
+        clientTs: Date.now(),
+      });
+      if(emailStatus) emailStatus.textContent = 'Pokusaj sacuvan (Firestore).';
+    }catch(err){
+      console.warn('Firestore upis za test_attempts nije uspeo', err);
+      if(emailStatus) emailStatus.textContent = 'Upis u bazu nije uspeo: '+(err?.message||err);
+    }
+
+    if(result){
+      result.style.display='block';
+      result.innerHTML = '<h3>Rezultat</h3><p>Tacnih: <b>'+correct+'</b> od '+total+'</p>';
+    }
+
+    const targetEmail = test.authorEmail || emailConfig.to || '';
+    if(!targetEmail){
+      if(emailStatus) emailStatus.textContent = 'Nema definisanog primaoca rezultata.';
+      return;
+    }
+    if(emailStatus) emailStatus.textContent = 'Saljem rezultat...';
+    try{
+      const lines = [];
+      lines.push('Rezultat testa: '+test.title);
+      lines.push('Kandidat: '+(sessionUser?.handle||handleValLocal||'anonimno'));
+      lines.push('Tacnih: '+correct+' od '+total);
+      lines.push('');
+      answers.forEach((a,i)=>{
+        const qLabel = a.isCode ? 'CODE:\n'+(a.text||'') : (a.text||'');
+        lines.push((i+1)+'. '+qLabel);
+        lines.push('  odgovor: '+(a.pickedText||'nije odgovoreno'));
+        lines.push('  tacno: '+(a.correctText||''));
+        lines.push('');
+      });
+      const message = lines.join('\n');
+      const hasEndpoint = emailConfig?.endpoint && !String(emailConfig.endpoint).includes('REPLACE');
+      const hasAccessKey = emailConfig?.accessKey && !String(emailConfig.accessKey).includes('REPLACE');
+      if(hasEndpoint && hasAccessKey){
+        const payload = {
+          access_key: emailConfig.accessKey,
+          from_email: sessionUser?.email || emailConfig.fromEmail || 'no-reply@codearena.local',
+          from_name: emailConfig.fromName || 'CodeArena',
+          subject: 'Rezultat testa: '+test.title,
+          message,
+          to: targetEmail,
+        };
+        const res = await fetch(emailConfig.endpoint, {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const dataRes = await res.json().catch(()=> ({}));
+        if(!res.ok){
+          throw new Error(dataRes?.error || dataRes?.message || ('Email API error '+res.status));
+        }
+        if(emailStatus) emailStatus.textContent = 'Email poslat (Web3Forms).';
+      }else{
+        const body = encodeURIComponent(message);
+        const subj = encodeURIComponent('Rezultat testa: '+test.title);
+        window.location.href = 'mailto:'+encodeURIComponent(targetEmail)+'?subject='+subj+'&body='+body;
+        if(emailStatus) emailStatus.textContent = 'Otvoren email klijent (mailto).';
+      }
+    }catch(err){
+      console.warn('Email slanje nije uspelo', err);
+      const reason = err?.message || 'Nepoznata greska';
+      if(emailStatus) emailStatus.textContent = 'Slanje emaila nije uspelo: '+reason;
+    }
+  }
 }
 
 function renderTestForm({ user, test, mode }){

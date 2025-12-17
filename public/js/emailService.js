@@ -1,7 +1,9 @@
 import { EMAIL_API_CONFIG } from './config.js';
 
 export function isEmailApiConfigured(){
-  return !!(EMAIL_API_CONFIG?.endpoint && !EMAIL_API_CONFIG.endpoint.includes('REPLACE'));
+  const hasEndpoint = EMAIL_API_CONFIG?.endpoint && !String(EMAIL_API_CONFIG.endpoint).includes('REPLACE');
+  const hasAccessKey = EMAIL_API_CONFIG?.accessKey && !String(EMAIL_API_CONFIG.accessKey).includes('REPLACE');
+  return !!(hasEndpoint && hasAccessKey);
 }
 
 export async function sendEmailViaApi({ to, subject, message, replyTo, fromEmail, fromName }){
@@ -11,12 +13,15 @@ export async function sendEmailViaApi({ to, subject, message, replyTo, fromEmail
 
   const endpoint = EMAIL_API_CONFIG.endpoint;
   const payload = {
-    email: replyTo || fromEmail || EMAIL_API_CONFIG.fromEmail || 'no-reply@codearena.local',
-    name: fromName || EMAIL_API_CONFIG.fromName || 'CodeArena',
+    access_key: EMAIL_API_CONFIG.accessKey,
+    from_email: replyTo || fromEmail || EMAIL_API_CONFIG.fromEmail || 'no-reply@codearena.local',
+    from_name: fromName || EMAIL_API_CONFIG.fromName || 'CodeArena',
     subject: subject || 'Poruka',
     message: message || '',
   };
-  // Formspree šalje na adresu podešenu u dashboardu; "to" koristimo samo za fallback info
+
+  // Web3Forms payload; raniji Formspree JSON payload je ostavljen ispod za referencu.
+  // const payload = { email, name, subject, message, to }; // Formspree varijanta (komentarisana)
   if(to || EMAIL_API_CONFIG.to){
     payload.to = to || EMAIL_API_CONFIG.to;
   }

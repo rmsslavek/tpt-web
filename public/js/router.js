@@ -7,7 +7,7 @@ import { SubmissionsView } from './views/submissions.js';
 import { ProfileView } from './views/profile.js';
 import { LoginView, RegisterView } from './views/auth.js';
 import { RanklistView } from './views/ranklist.js';
-import { TestsListView, TestCreateView, TestRunView, TestEditView } from './views/tests.js';
+import { TestsListView, TestCreateView, TestRunView, TestEditView, initTestRunPage } from './views/tests.js';
 import { initTermButtons } from './termButton.js';
 
 const DEBUG_DUMP_KEY = 'ca_debug_dump';
@@ -26,7 +26,7 @@ const routes = [
   { path: /^#\/tests\/?$/, view: TestsListView },
   { path: /^#\/tests\/new\/?$/, view: TestCreateView },
   { path: /^#\/tests\/edit\/([\w-]+)\/?$/, view: TestEditView },
-  { path: /^#\/tests\/run\/([\w-]+)\/?$/, view: TestRunView },
+  { path: /^#\/tests\/run\/([\w-]+)\/?$/, view: TestRunView, init: initTestRunPage },
 ];
 
 const viewEl = () => document.getElementById('view');
@@ -43,12 +43,39 @@ export function initRouter() {
 }
 
 function runInlineScripts(root) {
-  root.querySelectorAll('script').forEach(old => {
-    const s = document.createElement('script');
-    [...old.attributes].forEach(attr => s.setAttribute(attr.name, attr.value));
-    s.textContent = old.textContent;
-    old.replaceWith(s);
+  const errors = [];
+  root.querySelectorAll('script').forEach((old, idx) => {
+    const type = (old.getAttribute('type') || '').toLowerCase();
+    // Preskoči non-JS skripte (npr. application/json) da ne bismo dobili SyntaxError
+    const isJsType = !type || type === 'text/javascript' || type === 'application/javascript' || type === 'module';
+    if (!isJsType) return;
+    const code = old.textContent || '';
+    try {
+      // Skip module skripte (CSP ih blokira za blob/import); neće se izvršiti
+      if (type === 'module') return;
+      const s = document.createElement('script');
+      [...old.attributes].forEach(attr => s.setAttribute(attr.name, attr.value));
+      s.textContent = code;
+      // Umetni globalno (body ili head) da izbegnemo DOM Exception na insertBefore
+      const target = document.body || document.head || old.parentNode;
+      if (target) {
+        target.appendChild(s);
+      } else {
+        // Fallback na eval
+        try { (new Function(code))(); } catch(errExec){ console.error('[router] inline script eval fallback error', errExec); }
+      }
+      old.remove();
+    } catch (errOuter) {
+      const info = { index: idx, type, message: errOuter?.message || String(errOuter), textPreview: code.slice(0,120) };
+      errors.push(info);
+      console.error('[router] inline script error (outer)', info, errOuter);
+    }
   });
+  if (errors.length) {
+    window.__inlineScriptErrors = errors;
+  } else {
+    window.__inlineScriptErrors = [];
+  }
 }
 
 async function render() {
@@ -66,6 +93,9 @@ async function render() {
       runInlineScripts(viewEl());
       attachActions(viewEl());
       initTermButtons(viewEl());
+      if (typeof r.init === 'function') {
+        try { await r.init({ root: viewEl(), params }); } catch(err){ console.error('init handler error', err); }
+      }
       maybeDumpRender(h, html);
       return;
     }
