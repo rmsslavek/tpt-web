@@ -14,6 +14,7 @@ export function Navbar(root){
       </div>
       <div class="nav-links" id="navLinks">
         <a href="#/problemset">Zadaci</a>
+        ${me?.isAdmin ? `<a href="#/problems/admin">Novi zadatak</a>` : ''}
         <a href="#/contests">Takmicenja</a>
         <a href="#/tests">Testovi</a>
         ${me?.isAdmin ? `<a href="#/admin/accounts" title="Upravljanje nalozima">Nalozi</a>` : ''}

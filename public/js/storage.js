@@ -245,6 +245,7 @@ export function setUserDisabled(handle, disabled){
 
 if (typeof window !== 'undefined') {
   window.recordUserAccess = recordUserAccess;
+  window.setUserDisabled = setUserDisabled;
 }
 
 export const db = {

@@ -61,6 +61,7 @@ export function RegisterView(){
     <form id="regForm">
       <div class="row"><label>Korisnicko ime</label><input name="handle" required pattern="[A-Za-z0-9_]{3,20}" title="3-20 znakova, slova/cifre/_" /></div>
       <div class="row"><label>Lozinka</label><input name="password" type="password" required minlength="4" /></div>
+      <div class="row"><label>Email</label><input name="email" type="email" required /></div>
       <div class="row"><label>Zemlja</label><input name="country" /></div>
       <div class="row"><label>Organizacija</label><input name="org" /></div>
       <div class="row"><label></label><button class="btn primary" type="submit">Kreiraj nalog</button></div>
@@ -74,9 +75,12 @@ export function RegisterView(){
         const data = Object.fromEntries(new FormData(f).entries());
         const users = JSON.parse(localStorage.getItem('ca_users')||'[]');
         if(users.some(u=>u.handle.toLowerCase()===data.handle.toLowerCase())){ alert('Korisnicko ime zauzeto'); return; }
-        users.push({ handle:data.handle, password:data.password, rating:1500, country:data.country||'', org:data.org||'' });
+        if(!(data.email||'').trim()){ alert('Email je obavezan'); return; }
+        const email = (data.email||'').trim();
+        users.push({ handle:data.handle, password:data.password, rating:1500, country:data.country||'', org:data.org||'', email, disabled:false });
         localStorage.setItem('ca_users', JSON.stringify(users));
         localStorage.setItem('ca_session', JSON.stringify({ handle: data.handle }));
+        try{ window.recordUserAccess?.(data.handle); }catch(_){}
         window.dispatchEvent(new Event('ca:session'));
         location.hash = '#/';
       });

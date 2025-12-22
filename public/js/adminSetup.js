@@ -16,9 +16,9 @@ function renderOverlay(){
   overlay.innerHTML = `
     <div class="modal">
       <h3>Postavite prvog administratora</h3>
-      <p class="muted">Nema nijednog naloga sa administratorskim pravima. Kreirajte glavnog administratora koji će moći da dodeljuje prava drugima.</p>
+      <p class="muted">Nema nijednog naloga sa admin pravima. Kreirajte glavnog administratora koji moze da dodeljuje prava drugima.</p>
       <form id="adminSetupForm" style="display:flex;flex-direction:column;gap:.6rem">
-        <label>Korisničko ime
+        <label>Korisnicko ime
           <input name="handle" placeholder="npr. admin" required pattern="[A-Za-z0-9_]{3,20}" title="3-20 znakova, slova/cifre/_">
         </label>
         <label>Lozinka
@@ -35,7 +35,7 @@ function renderOverlay(){
         </label>
         <p class="muted" data-error style="color:#e34d4d;display:none"></p>
         <div class="actions" style="display:flex;justify-content:flex-end;gap:.6rem;margin-top:.5rem">
-          <button class="btn primary" type="submit">Sačuvaj administratora</button>
+          <button class="btn primary" type="submit">Sacuvaj administratora</button>
         </div>
       </form>
     </div>`;
@@ -53,11 +53,11 @@ function renderOverlay(){
       return showError(errorEl, 'Sva obavezna polja moraju biti popunjena.');
     }
     if (!/^[A-Za-z0-9_]{3,20}$/.test(handle)){
-      return showError(errorEl, 'Korisničko ime mora imati 3-20 znakova (slova, cifre, _).');
+      return showError(errorEl, 'Korisnicko ime mora imati 3-20 znakova (slova, cifre, _).');
     }
     const users = db.users();
     if (users.some(u => u.handle.toLowerCase() === handle.toLowerCase())){
-      return showError(errorEl, 'Korisničko ime je zauzeto.');
+      return showError(errorEl, 'Korisnicko ime je zauzeto.');
     }
     const adminUser = {
       handle,
@@ -68,6 +68,7 @@ function renderOverlay(){
       rating: 2000,
       isAdmin: true,
       isOwner: true,
+      disabled: false
     };
     users.push(adminUser);
     db.saveUsers(users);
@@ -81,4 +82,3 @@ function showError(target, text){
   target.textContent = text;
   target.style.display = 'block';
 }
-
