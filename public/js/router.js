@@ -8,6 +8,7 @@ import { ProfileView } from './views/profile.js';
 import { LoginView, RegisterView } from './views/auth.js';
 import { RanklistView } from './views/ranklist.js';
 import { TestsListView, TestCreateView, TestRunView, TestEditView, initTestRunPage } from './views/tests.js';
+import { AdminAccountsView } from './views/admin.js';
 import { initTermButtons } from './termButton.js';
 
 const DEBUG_DUMP_KEY = 'ca_debug_dump';
@@ -27,6 +28,7 @@ const routes = [
   { path: /^#\/tests\/new\/?$/, view: TestCreateView },
   { path: /^#\/tests\/edit\/([\w-]+)\/?$/, view: TestEditView },
   { path: /^#\/tests\/run\/([\w-]+)\/?$/, view: TestRunView, init: initTestRunPage },
+  { path: /^#\/admin\/accounts\/?$/, view: AdminAccountsView },
 ];
 
 const viewEl = () => document.getElementById('view');
@@ -147,3 +149,4 @@ function maybeDumpRender(hash, html) {
   link.download = 'render-dump.txt';
   link._blobUrl = url;
 }
+

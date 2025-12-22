@@ -19,3 +19,4 @@ export function RanklistView(){
     </table>
   </section>`;
 }
+

@@ -24,3 +24,4 @@ export function ProfileView({ params }){
   </section>`;
 }
 
+

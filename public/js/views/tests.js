@@ -18,21 +18,27 @@ export function TestsListView(){
   const isAdmin = !!user?.isAdmin;
   const tests = db.tests();
   const isLogged = !!me;
+  const visibleTests = tests.filter(t=>{
+    if(isAdmin) return true;
+    if(!t.assignedHandle) return true;
+    const target = (t.assignedHandle||'').toLowerCase();
+    return me && (me.handle||'').toLowerCase() === target;
+  });
   return `
   <section class="panel">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap">
       <h2>Testovi znanja</h2>
       ${isAdmin ? `<a class="btn primary" href="#/tests/new">Kreiraj novi test</a>` : `<span class="muted">Kreiranje testa je dozvoljeno samo administratorima.</span>`}
     </div>
-    ${tests.length ? `
+    ${visibleTests.length ? `
       <table class="table" style="margin-top:.6rem">
         <thead><tr><th>Naziv</th><th>Pitanja</th><th>Vreme</th><th>Autor</th><th>Akcije</th></tr></thead>
         <tbody>
-          ${tests.map(t=>`<tr>
+          ${visibleTests.map(t=>`<tr>
             <td>${t.title}</td>
             <td>${t.questions.length}</td>
             <td>${Math.max(1, Math.ceil(t.durationSeconds/60))} min</td>
-            <td class="muted">${t.authorHandle||'—'}</td>
+            <td class="muted">${t.authorHandle||'-'}</td>
             <td style="display:flex;gap:.4rem;flex-wrap:wrap">
             ${isLogged ? `<a class="btn" href="#/tests/run/${t.id}">Pokreni</a>` : `<a class="btn ghost" href="#/login">Prijavi se</a>`}
             ${isAdmin ? `<a class="btn warn" href="#/tests/edit/${t.id}">Izmeni</a>` : ''}
@@ -41,13 +47,13 @@ export function TestsListView(){
         </tr>`).join('')}
         </tbody>
       </table>
-    `: `<p class="muted" style="margin-top:1rem">Još uvek nema testova. Napravite prvi!</p>`}
+    `: `<p class="muted" style="margin-top:1rem">Jo?? uvek nema testova. Napravite prvi!</p>`}
     ${user?.isOwner ? `
       <div class="panel" style="margin-top:1rem">
         <h3>Dodela admin prava</h3>
-        <p class="muted">Samo vlasnik sajta može dodeliti administratorsku ulogu.</p>
+        <p class="muted">Samo vlasnik sajta mo??e dodeliti administratorsku ulogu.</p>
         <form id="grantAdmin" style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center">
-          <input name="handle" placeholder="Korisničko ime" required style="max-width:220px" />
+          <input name="handle" placeholder="Korisni??ko ime" required style="max-width:220px" />
           <button class="btn primary" type="submit">Dodeli admin</button>
         </form>
       </div>
@@ -60,7 +66,7 @@ export function TestsListView(){
             const h=(f.handle.value||'').trim();
             const users = JSON.parse(localStorage.getItem('ca_users')||'[]');
             const u = users.find(x=>x.handle.toLowerCase()===h.toLowerCase());
-            if(!u){ alert('Korisnik nije pronađen'); return; }
+            if(!u){ alert('Korisnik nije prona??en'); return; }
             u.isAdmin=true;
             localStorage.setItem('ca_users', JSON.stringify(users));
             alert('Dodeljena admin prava za '+u.handle);
@@ -76,7 +82,7 @@ export function TestsListView(){
             btn.addEventListener('click', async ()=>{
               const id = btn.getAttribute('data-remove-test');
               if(!id) return;
-              if(!window.confirm('Obriši test '+id+'?')) return;
+              if(!window.confirm('Obri??i test '+id+'?')) return;
               // localStorage update
               const tests = JSON.parse(localStorage.getItem('ca_tests')||'[]').filter(t=>t.id!==id);
               localStorage.setItem('ca_tests', JSON.stringify(tests));
@@ -87,7 +93,7 @@ export function TestsListView(){
                   await tools.deleteDoc(ref);
                 }
               }catch(err){
-                console.warn('Firestore brisanje testa neuspešno', err);
+                console.warn('Firestore brisanje testa neuspe??no', err);
               }
               location.reload();
             });
@@ -105,7 +111,7 @@ export function TestsListView(){
           <label>Organizacija<input name="org" /></label>
           <label>Zemlja<input name="country" /></label>
           <label>Rating<input name="rating" type="number" min="0" value="1500" /></label>
-          <button class="btn primary" type="submit">Sačuvaj korisnika</button>
+          <button class="btn primary" type="submit">Sa??uvaj korisnika</button>
         </form>
       </div>
       <script>
@@ -138,7 +144,48 @@ export function TestsListView(){
     `:''}
     ${isAdmin ? `
       <div class="panel" style="margin-top:1rem">
-        <h3>Pregled urađenih testova</h3>
+        <h3>Upravljanje nalozima</h3>
+        <p class="muted" style="margin-bottom:.5rem">Prvi/prip poslednji pristup i IP se beleze pri prijavi. Mozete privremeno onemoguciti naloge.</p>
+        <div style="overflow:auto">
+          <table class="table">
+            <thead>
+              <tr><th>Handle</th><th>Email</th><th>Uloga</th><th>Prvi pristup</th><th>Poslednji pristup</th><th>IP</th><th>Stanje</th></tr>
+            </thead>
+            <tbody>
+              ${users.map(u=>`<tr>
+                <td>${u.handle}</td>
+                <td class="muted">${u.email||'-'}</td>
+                <td class="muted">${u.isAdmin ? 'admin' : 'korisnik'}</td>
+                <td class="muted">${u.firstSeen ? new Date(u.firstSeen).toLocaleString() : '-'}</td>
+                <td class="muted">${u.lastSeen ? new Date(u.lastSeen).toLocaleString() : '-'}</td>
+                <td class="muted">${u.lastIp || '-'}</td>
+                <td><button class="btn ${u.disabled ? 'warn' : ''}" data-toggle-user="${u.handle}">${u.disabled ? 'Omoguci' : 'Onemoguci'}</button></td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <script>
+        (function(){
+          document.querySelectorAll('[data-toggle-user]')?.forEach(btn=>{
+            btn.addEventListener('click', ()=>{
+              const h = btn.getAttribute('data-toggle-user')||'';
+              const list = JSON.parse(localStorage.getItem('ca_users')||'[]');
+              const idx = list.findIndex(u=> (u.handle||'').toLowerCase()===h.toLowerCase());
+              if(idx===-1){ alert('Nalog nije pronadjen'); return; }
+              const nowDisabled = !list[idx].disabled;
+              list[idx].disabled = nowDisabled;
+              localStorage.setItem('ca_users', JSON.stringify(list));
+              btn.textContent = nowDisabled ? 'Omoguci' : 'Onemoguci';
+              btn.classList.toggle('warn', nowDisabled);
+            });
+          });
+        })();
+      </script>
+    `:''}
+    ${isAdmin ? `
+      <div class="panel" style="margin-top:1rem">
+        <h3>Pregled ura??enih testova</h3>
         <form id="attemptViewer" style="display:grid;gap:.6rem;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));align-items:end;margin-bottom:.6rem">
           <label>Korisnik
             <select name="user" required>
@@ -151,7 +198,7 @@ export function TestsListView(){
               <option value="">-- izaberi test --</option>
             </select>
           </label>
-          <button class="btn primary" type="submit">Prikaži rezultat</button>
+          <button class="btn primary" type="submit">Prika??i rezultat</button>
         </form>
         <div id="attemptDetails" class="panel" style="background:#11162a;border:1px dashed #273056;font-size:13px"></div>
       </div>
@@ -168,7 +215,7 @@ export function TestsListView(){
                 const snap = await tools.getDocs(tools.collection(tools.firestore, 'test_attempts'));
                 return snap.docs.map(d=>({ id:d.id, ...d.data() }));
               }catch(err){
-                console.warn('Ne mogu da čitam test_attempts iz Firestore-a', err);
+                console.warn('Ne mogu da ??itam test_attempts iz Firestore-a', err);
               }
             }
             try{return JSON.parse(localStorage.getItem('ca_test_attempts')||'[]');}catch(_){return [];}
@@ -177,12 +224,12 @@ export function TestsListView(){
           function populateTests(){
             if(!userSel || !testSel) return;
             const handle = (userSel.value||'').toLowerCase();
-            // Učitaj pokušaje iz Firestore-a ako su dostupni
+            // U??itaj poku??aje iz Firestore-a ako su dostupni
             readAttempts().then(attempts=>{
               const filtered = attempts.filter(a=>a.handle === handle);
               testSel.innerHTML = '<option value="">-- izaberi test --</option>' + filtered.map(a=>'<option value="'+a.testId+'">'+(a.testTitle||a.testId)+'</option>').join('');
               testSel.disabled = filtered.length===0;
-              details.innerHTML = filtered.length ? 'Izaberite test za pregled.' : 'Nema pokušaja za ovog korisnika.';
+              details.innerHTML = filtered.length ? 'Izaberite test za pregled.' : 'Nema poku??aja za ovog korisnika.';
             });
           }
           function renderAttempt(){
@@ -198,7 +245,7 @@ export function TestsListView(){
                   + '<div style="font-weight:600">'+(i+1)+'. '+(a.isCode ? 'CODE:' : 'Pitanje:')+'</div>'
                   + qLabel
                   + '<div><span class="muted">Odgovor:</span> '+(a.pickedText||'nije odgovoreno')+'</div>'
-                  + '<div><span class="muted">Tačno:</span> '+(a.correctText||'')+'</div>'
+                  + '<div><span class="muted">Ta??no:</span> '+(a.correctText||'')+'</div>'
                   + '</div>';
               }).join('');
               details.innerHTML =
@@ -227,7 +274,7 @@ export function TestCreateView(){
   const me = db.session();
   const user = me ? db.users().find(u=>u.handle===me.handle) : null;
   if(!me){
-    return `<div class="panel">Samo administrator može da kreira test. <a href="#/login">Prijavite se</a>.</div>`;
+    return `<div class="panel">Samo administrator mo??e da kreira test. <a href="#/login">Prijavite se</a>.</div>`;
   }
   if(!user?.isAdmin){
     return `<div class="panel">Nemate administratorska prava. Vlasnik sajta mora da ih dodeli kako biste kreirali test.</div>`;
@@ -245,6 +292,13 @@ export function TestRunView({ params }){
   const test = db.tests().find(t=>t.id===id);
   if(!test){
     return `<div class="panel">Test nije pronadjen. <a href="#/tests">Nazad</a></div>`;
+  }
+  const isAdmin = !!user?.isAdmin;
+  if(test.assignedHandle && !isAdmin){
+    const target = (test.assignedHandle||'').toLowerCase();
+    if((me.handle||'').toLowerCase() !== target){
+      return `<div class="panel">Ovaj test je dostupan samo nalogu ${test.assignedHandle}. <a href="#/tests">Nazad</a></div>`;
+    }
   }
   return `
   <section id="takeWrap" class="panel" style="max-width:900px;margin:0 auto">
@@ -310,7 +364,7 @@ export function TestEditView({ params }){
   }
   const test = db.tests().find(t=>t.id===id);
   if(!test){
-    return `<div class="panel">Test nije pronađen. <a href="#/tests">Nazad</a></div>`;
+    return `<div class="panel">Test nije prona??en. <a href="#/tests">Nazad</a></div>`;
   }
   return renderTestForm({ user, test, mode:'edit' });
 }
@@ -511,7 +565,7 @@ export function initTestRunPage({ root }){
 function renderTestForm({ user, test, mode }){
   const heading = mode==='edit' ? `Izmena testa: ${test.title}` : 'Novi test';
   const notifyValue = test?.authorEmail || user.email || '';
-  const btnLabel = mode==='edit' ? 'Sačuvaj izmene' : 'Sačuvaj test';
+  const btnLabel = mode==='edit' ? 'Sa??uvaj izmene' : 'Sa??uvaj test';
   const formId = mode==='edit' ? 'editTestForm' : 'newTestForm';
   const durationMinutes = test ? Math.max(1, Math.ceil(test.durationSeconds/60)) : 2;
   const allTests = db.tests();
@@ -522,13 +576,14 @@ function renderTestForm({ user, test, mode }){
       <div class="row"><label>Naziv testa</label><input name="title" required placeholder="npr. Osnove JS" value="${test?.title||''}" /></div>
       <div class="row"><label>Trajanje (minute)</label><input name="durationMinutes" type="number" min="1" step="1" value="${durationMinutes}" required /></div>
       <div class="row"><label>Email za rezultate</label><input name="notifyEmail" type="email" value="${notifyValue}" required /></div>
+      <div class="row"><label>Test dodeljen nalogu</label><input name="assignedHandle" placeholder="ostavi prazno za sve" value="${test?.assignedHandle||''}" /></div>
       <div class="row"><label>Import pitanja (JSON)</label>
         <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
           <input id="importQuestions" type="file" accept=".json,.txt" />
           <span class="muted" style="font-size:12px">Format: JSON array objekata { type:'text'|'code', text:'', code:'', options:[], answer:0 }</span>
         </div>
       </div>
-      <div class="row"><label>Dodaj u postojeći test</label>
+      <div class="row"><label>Dodaj u postoje??i test</label>
         <select id="importTarget">
           <option value="">-- novi test / trenutni --</option>
           ${allTests.map(t=>`<option value="${t.id}">${t.title} (${t.id})</option>`).join('')}
@@ -645,6 +700,7 @@ function renderTestForm({ user, test, mode }){
         form.title.value = found.title || '';
         form.durationMinutes.value = Math.max(1, Math.ceil((found.durationSeconds||120)/60));
         form.notifyEmail.value = found.authorEmail || form.notifyEmail.value;
+        if(form.assignedHandle) form.assignedHandle.value = found.assignedHandle || '';
       }
       if(importTarget){
         importTarget.addEventListener('change', ()=>{
@@ -683,7 +739,7 @@ function renderTestForm({ user, test, mode }){
             };
             addQuestion(prefill);
           });
-          alert('Import završen. Proverite pitanja pre čuvanja.');
+          alert('Import zavr??en. Proverite pitanja pre ??uvanja.');
         }catch(err){
           alert('Import nije uspeo: '+(err?.message||err));
         }
@@ -700,6 +756,7 @@ function renderTestForm({ user, test, mode }){
         const durationMinutes = Math.max(1, Number(data.get('durationMinutes'))||0);
         const durationSeconds = durationMinutes * 60;
         const notifyEmail = (data.get('notifyEmail')||'').trim();
+        const assignedHandle = (data.get('assignedHandle')||'').trim();
         const questions = [];
         qWrap.querySelectorAll('[data-question]').forEach((blk)=>{
           const qKey = blk.getAttribute('data-question');
@@ -722,13 +779,14 @@ function renderTestForm({ user, test, mode }){
         const tests = JSON.parse(localStorage.getItem('ca_tests')||'[]');
         if(mode==='edit' && existing){
           const idx = tests.findIndex(t=>t.id===existing.id);
-          if(idx===-1){ alert('Test više ne postoji.'); return; }
+          if(idx===-1){ alert('Test vi??e ne postoji.'); return; }
           tests[idx] = {
             ...tests[idx],
             title,
             durationSeconds,
             questions,
-            authorEmail: notifyEmail
+            authorEmail: notifyEmail,
+            assignedHandle: assignedHandle || ''
           };
         }else{
           const slug = title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
@@ -743,7 +801,7 @@ function renderTestForm({ user, test, mode }){
               id = 'test-'+(Date.now()+Math.floor(Math.random()*1000));
             }
           }
-          tests.push({ id, title, durationSeconds, questions, authorHandle: authorHandle, authorEmail:notifyEmail });
+          tests.push({ id, title, durationSeconds, questions, authorHandle: authorHandle, authorEmail:notifyEmail, assignedHandle: assignedHandle || '' });
         }
         localStorage.setItem('ca_tests', JSON.stringify(tests));
         location.hash = '#/tests';
@@ -751,4 +809,8 @@ function renderTestForm({ user, test, mode }){
     })();
   </script>`;
 }
+
+
+
+
 

@@ -39,6 +39,7 @@ let seedDone = false;
 let currentSessionHandle = null;
 let lastFetchedCounts = null;
 let firestoreOnline = true;
+let cachedIp = null;
 
 function safeParse(value, fallback) {
   try {
@@ -58,6 +59,21 @@ function loadLocalState(){
   state.contests = readJson(LS.contests, fallbacks.contests || []);
   state.submissions = readJson(LS.submissions, []);
   state.tests = withDefaultTests(readJson(LS.tests, fallbacks.tests || []), fallbacks.tests);
+}
+
+async function fetchClientIp(){
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(), 3000);
+  try{
+    const res = await fetch('https://api.ipify.org?format=json', { signal: controller.signal });
+    const data = await res.json().catch(()=> ({}));
+    if(data?.ip) cachedIp = data.ip;
+    return data?.ip || cachedIp;
+  }catch(_){
+    return cachedIp;
+  }finally{
+    clearTimeout(timer);
+  }
 }
 
 function normalizeProblem(p){
@@ -205,6 +221,32 @@ export async function ensureSeed() {
   seedDone = true;
 }
 
+export async function recordUserAccess(handle){
+  if(!handle) return;
+  const idx = state.users.findIndex(u=> (u.handle||'').toLowerCase() === String(handle).toLowerCase());
+  if(idx<0) return;
+  const now = Date.now();
+  const ip = await fetchClientIp();
+  const updated = { ...state.users[idx] };
+  if(!updated.firstSeen) updated.firstSeen = now;
+  updated.lastSeen = now;
+  if(ip) updated.lastIp = ip;
+  state.users[idx] = updated;
+  db.saveUsers(state.users);
+}
+
+export function setUserDisabled(handle, disabled){
+  const idx = state.users.findIndex(u=> (u.handle||'').toLowerCase() === String(handle).toLowerCase());
+  if(idx<0) return false;
+  state.users[idx] = { ...state.users[idx], disabled: !!disabled };
+  db.saveUsers(state.users);
+  return true;
+}
+
+if (typeof window !== 'undefined') {
+  window.recordUserAccess = recordUserAccess;
+}
+
 export const db = {
   users() { return state.users; },
   saveUsers(v){ localStorage.setItem(LS.users, JSON.stringify(v)); },
@@ -231,6 +273,10 @@ export function requireAuth(){ if(!currentUser()) location.hash = '#/login'; }
 export function findUser(handle){ return state.users.find(u=>u.handle.toLowerCase()===handle.toLowerCase()); }
 export function isAdminHandle(handle){ const u = findUser(handle||''); return !!u?.isAdmin; }
 
+if (typeof window !== 'undefined') {
+  window.recordUserAccess = recordUserAccess;
+}
+
 function withDefaultSystemUsers(list){
   const users = Array.isArray(list) ? [...list] : [];
   const defaults = [
@@ -243,7 +289,8 @@ function withDefaultSystemUsers(list){
       email:'slavisa.radovic@gmail.com',
       isAdmin:true,
       isOwner:true,
-      hidden:true
+      hidden:true,
+      disabled:false
     },
     {
       handle:'gost',
@@ -253,7 +300,8 @@ function withDefaultSystemUsers(list){
       org:'',
       email:'',
       isAdmin:false,
-      hidden:true
+      hidden:true,
+      disabled:false
     }
   ];
 
@@ -339,12 +387,12 @@ const fallbacks = {
     { id: 'CA-R1', title: 'CodeArena Round #1', startTime: '2025-11-01T12:00:00.000Z', durationMinutes: 120, problems: ['A100', 'B101', 'C102'] }
   ],
   users: [
-    { handle: 'tourist_demo', password: 'demo', rating: 3800, country: 'RU', org: '-', email: 'tourist@example.com', isAdmin: false },
-    { handle: 'benq_demo', password: 'demo', rating: 3600, country: 'US', org: '-', email: 'benq@example.com', isAdmin: false },
-    { handle: 'newbie', password: '1234', rating: 800, country: 'RS', org: '-', email: 'newbie@example.com', isAdmin: false },
-    { handle: 'site_owner', password: 'owner', rating: 5000, country: 'RS', org: 'CodeArena', email: 'owner@codearena.local', isAdmin: false, isOwner: false },
-    { handle: 'slavek', password: 'NikolaJokic-2025', rating: 5000, country: 'RS', org: 'CodeArena', email: 'slavisa.radovic@gmail.com', isAdmin: true, isOwner: true, hidden: true },
-    { handle: 'gost', password: '613858', rating: 1200, country: 'RS', org: '', email: '', isAdmin: false, hidden: true }
+    { handle: 'tourist_demo', password: 'demo', rating: 3800, country: 'RU', org: '-', email: 'tourist@example.com', isAdmin: false, disabled:false },
+    { handle: 'benq_demo', password: 'demo', rating: 3600, country: 'US', org: '-', email: 'benq@example.com', isAdmin: false, disabled:false },
+    { handle: 'newbie', password: '1234', rating: 800, country: 'RS', org: '-', email: 'newbie@example.com', isAdmin: false, disabled:false },
+    { handle: 'site_owner', password: 'owner', rating: 5000, country: 'RS', org: 'CodeArena', email: 'owner@codearena.local', isAdmin: false, isOwner: false, disabled:false },
+    { handle: 'slavek', password: 'NikolaJokic-2025', rating: 5000, country: 'RS', org: 'CodeArena', email: 'slavisa.radovic@gmail.com', isAdmin: true, isOwner: true, hidden: true, disabled:false },
+    { handle: 'gost', password: '613858', rating: 1200, country: 'RS', org: '', email: '', isAdmin: false, hidden: true, disabled:false }
   ],
   tests: [
     {
@@ -373,3 +421,4 @@ const fallbacks = {
     }
   ]
 };
+

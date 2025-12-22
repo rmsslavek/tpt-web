@@ -23,3 +23,4 @@ export const EMAIL_API_CONFIG = {
 //   fromEmail: "no-reply@codearena.local",
 //   fromName: "CodeArena",
 // };
+

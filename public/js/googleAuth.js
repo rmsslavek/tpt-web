@@ -1,4 +1,5 @@
 import { GOOGLE_CLIENT_ID } from './config.js';
+import { recordUserAccess } from './storage.js';
 
 // Pomoćne funkcije za dekodiranje JWT i prijavu korisnika u lokalnu sesiju
 function decodeJwt(token){
@@ -21,14 +22,17 @@ function upsertLocalUserFromGoogle(profile){
   }
   const existing = users.find(u=>u.googleSub && u.googleSub===profile.sub);
   if(existing){
+    if(existing.disabled){
+      return { blocked:true, handle: existing.handle };
+    }
     localStorage.setItem('ca_session', JSON.stringify({ handle: existing.handle }));
-    return existing.handle;
+    return { handle: existing.handle, blocked:false };
   }
-  const user = { handle, password: '', rating: 1500, country: profile.locale || '', org: profile.hd || '', googleSub: profile.sub, email: profile.email||'' };
+  const user = { handle, password: '', rating: 1500, country: profile.locale || '', org: profile.hd || '', googleSub: profile.sub, email: profile.email||'', disabled:false };
   users.push(user);
   localStorage.setItem('ca_users', JSON.stringify(users));
   localStorage.setItem('ca_session', JSON.stringify({ handle }));
-  return handle;
+  return { handle, blocked:false };
 }
 
 function ensureGisReady(){
@@ -53,11 +57,16 @@ async function initAndRender(container){
     await ensureGisReady();
     window.google.accounts.id.initialize({
       client_id: GOOGLE_CLIENT_ID,
-      callback: (resp)=>{
+      callback: async (resp)=>{
         const payload = decodeJwt(resp.credential);
-        if(!payload){ alert('Neuspešno čitanje Google tokena'); return; }
-        const handle = upsertLocalUserFromGoogle(payload);
+        if(!payload){ alert('Neuspesno citanje Google tokena'); return; }
+        const result = upsertLocalUserFromGoogle(payload);
+        if(!result || result.blocked){
+          alert('Ovaj nalog je deaktiviran od strane administratora.');
+          return;
+        }
         window.dispatchEvent(new Event('ca:session'));
+        recordUserAccess(result.handle).catch(()=>{});
         location.hash = '#/';
       },
       auto_select: false,
@@ -70,7 +79,7 @@ async function initAndRender(container){
       width: 260,
       text: 'continue_with'
     });
-    // Pre-stilizuj dugme da liči na naša .btn
+    // Pre-stilizuj dugme da lici na nasa .btn
     const btn = container.querySelector('div[role=button], button');
     if(btn){
       btn.classList.add('google-btn-custom');
@@ -81,7 +90,7 @@ async function initAndRender(container){
   }
 }
 
-// Izvezimo globalni helper da ga inline skripta iz LoginView može pozvati
+// Izvezimo globalni helper da ga inline skripta iz LoginView moze pozvati
 export function renderGoogleButtonInto(containerId){
   const el = document.getElementById(containerId);
   if(!el) return;
@@ -90,3 +99,4 @@ export function renderGoogleButtonInto(containerId){
 
 // Pristup kroz window radi inline skripti
 window.renderGoogleButtonInto = renderGoogleButtonInto;
+

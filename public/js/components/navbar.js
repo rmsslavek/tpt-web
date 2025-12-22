@@ -10,24 +10,25 @@ export function Navbar(root){
           <img class="brand-logo" src="./css/logo.png" alt="CodeArena logo">
           <span>CodeArena</span>
         </a>
-        <button class="nav-toggle icon-btn" id="navToggle" aria-label="Otvori meni">☰</button>
+        <button class="nav-toggle icon-btn" id="navToggle" aria-label="Otvori meni">|||</button>
       </div>
       <div class="nav-links" id="navLinks">
         <a href="#/problemset">Zadaci</a>
-        <a href="#/contests">Takmičenja</a>
+        <a href="#/contests">Takmicenja</a>
         <a href="#/tests">Testovi</a>
+        ${me?.isAdmin ? `<a href="#/admin/accounts" title="Upravljanje nalozima">Nalozi</a>` : ''}
         <a href="#/ranklist">Rang lista</a>
         <a href="#/submissions">Predaje</a>
         <span class="spacer"></span>
         ${me ? `
           <span class="user-pill" title="Prijavljen korisnik">
             <span class="user-handle">${me.handle}</span>
-            <span class="muted">• rating ${me.rating}</span>
+            <span class="muted">rating ${me.rating}</span>
           </span>
           <a class="btn ghost" href="#/profile/${me.handle}">Profil</a>
-          <button class="btn icon-btn exit-btn" type="button" id="logoutBtn" title="Izađi">
+          <button class="btn icon-btn exit-btn" type="button" id="logoutBtn" title="Izadi">
             <span class="exit-icon" aria-hidden="true"></span>
-            <span class="exit-label">Izađi</span>
+            <span class="exit-label">Izadi</span>
           </button>
         `: `
           <a class="btn ghost" href="#/login">Prijava</a>
@@ -37,11 +38,10 @@ export function Navbar(root){
     </nav>`;
     const lb = root.querySelector('#logoutBtn');
     if (lb) lb.addEventListener('click', () => {
-      if (!window.confirm('Da li ste sigurni da želite da izađete?')) return;
+      if (!window.confirm('Da li ste sigurni da zelite da izadjete?')) return;
       localStorage.removeItem('ca_session');
       window.dispatchEvent(new Event('ca:session'));
       location.hash = '#/';
-      // Hard refresh da stanje uvek bude čisto posle odjave
       window.location.reload();
     });
     const toggle = root.querySelector('#navToggle');
@@ -57,3 +57,4 @@ export function Navbar(root){
   window.addEventListener('hashchange', render);
   window.addEventListener('ca:session', render);
 }
+

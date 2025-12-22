@@ -59,3 +59,4 @@ function computeRanklist(contest){
   return Array.from(byUser.values()).sort((a,b)=> b.solved-a.solved || a.penalty-b.penalty);
 }
 
+

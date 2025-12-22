@@ -38,3 +38,4 @@ export async function sendEmailViaApi({ to, subject, message, replyTo, fromEmail
   }
   return data;
 }
+
