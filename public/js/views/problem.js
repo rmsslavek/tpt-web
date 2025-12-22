@@ -41,8 +41,8 @@ export function ProblemView({ params }) {
         <h3>Test primeri (admin)</h3>
         <div id="testsAdmin"></div>
         <form id="addTestForm" style="display:grid;gap:.5rem;margin-top:.6rem">
-          <label>Ulaz<br><textarea name="input" rows="4" required></textarea></label>
-          <label>Očekivani izlaz<br><textarea name="output" rows="4" required></textarea></label>
+          <label>Ulaz<br><textarea name="input" rows="12" required></textarea></label>
+          <label>Očekivani izlaz<br><textarea name="output" rows="12" required></textarea></label>
           <button class="btn" type="submit">Dodaj test</button>
         </form>
       </div>
@@ -56,7 +56,7 @@ export function ProblemView({ params }) {
       <form id="submitForm">
         <div class="row">
           <label>Kod</label>
-          <textarea name="source" rows="12" placeholder="Unesite C++ kod ovde"></textarea>
+          <textarea name="source" rows="36" placeholder="Unesite C++ kod ovde"></textarea>
         </div>
         <div class="row">
           <label></label>
@@ -79,4 +79,6 @@ export function ProblemView({ params }) {
 function escapeHtml(s) {
   return String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 }
+
+
 
