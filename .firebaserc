@@ -1,6 +1,8 @@
 {
   "projects": {
-    "default": "tpt-web-4825b"
+    "default": "tpt-web-4825b",
+    "n": "takmicarsko-programiranje",
+    "tpt-web": "tpt-web-4825b"
   },
   "targets": {
     "tpt-web-4825b": {

@@ -25,6 +25,7 @@ export function AdminProblemsView(){
             <td class="muted">${(p.tags||[]).join(', ')}</td>
             <td style="display:flex;gap:.4rem;flex-wrap:wrap">
               <button class="btn" data-edit-problem="${p.id}">Izmeni</button>
+              <button class="btn" data-export-problem="${p.id}">Export</button>
               <button class="btn warn" data-delete-problem="${p.id}">Obrisi</button>
             </td>
           </tr>`).join('')}
@@ -209,6 +210,35 @@ export function AdminProblemsView(){
           localStorage.setItem('ca_problems', JSON.stringify(list));
           alert('Zadatak obrisan.');
           location.hash = '#/problemset';
+        });
+      });
+      table?.querySelectorAll('[data-export-problem]')?.forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const id = btn.getAttribute('data-export-problem');
+          if(!id) return;
+          const list = JSON.parse(localStorage.getItem('ca_problems')||'[]');
+          const found = list.find(p=>p.id===id);
+          if(!found){ alert('Zadatak nije pronadjen'); return; }
+          const payload = {
+            id: found.id,
+            title: found.title||'',
+            difficulty: found.difficulty||0,
+            tags: found.tags||[],
+            timeLimit: found.timeLimit||0,
+            memoryLimit: found.memoryLimit||0,
+            statement: found.statement||'',
+            samples: (found.samples||[]).map(s=>({ input:s.input||'', output:s.output||'' })),
+            tests: (found.tests||[]).map(t=>({ id:t.id||'', in:t.in||'', out:t.out||'' })),
+          };
+          const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = (found.id||'problem') + '.json';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
         });
       });
       async function importProblemFromFile(file){
