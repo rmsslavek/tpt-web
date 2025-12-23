@@ -42,6 +42,12 @@ export function AdminProblemsView(){
       <div class="row"><label>Vreme (ms)</label><input name="timeLimit" type="number" min="100" step="100" value="1000" /></div>
       <div class="row"><label>Memorija (MB)</label><input name="memoryLimit" type="number" min="16" step="16" value="256" /></div>
       <div class="row"><label>Tekst zadatka</label><textarea name="statement" rows="8" required placeholder="Opis zadatka..."></textarea></div>
+      <div class="row"><label>Import zadatka (JSON)</label>
+        <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
+          <input id="importProblem" type="file" accept=".json,.txt" />
+          <span class="muted" style="font-size:12px">Format: { id:'', title:'', difficulty:800, tags:[], timeLimit:1000, memoryLimit:256, statement:'', samples:[{input:'',output:''}], tests:[{id:'',in:'',out:''}] }</span>
+        </div>
+      </div>
       <div class="row"><label>Sample primeri</label>
         <div id="samplesWrap"></div>
         <button class="btn" type="button" id="addSample">Dodaj sample</button>
@@ -68,6 +74,7 @@ export function AdminProblemsView(){
       const testsWrap = document.getElementById('testsWrap');
       const cancelBtn = document.getElementById('cancelEdit');
       const table = document.getElementById('problemsTable');
+      const importProblemInput = document.getElementById('importProblem');
       function showForm(p){
         formWrap.style.display = 'block';
         titleEl.textContent = p ? 'Izmeni zadatak' : 'Novi zadatak';
@@ -129,6 +136,61 @@ export function AdminProblemsView(){
         formWrap.style.display = 'none';
         state.editingId = null;
       });
+      function normalizeTestCase(t, idx, missing){
+        if(!t || typeof t !== 'object'){ missing.push('test #'+(idx+1)+': mora biti objekat'); return null; }
+        const id = (t.id||'').trim();
+        const tin = (t.in||'').trim();
+        const tout = (t.out||'').trim();
+        if(!id) missing.push('test #'+(idx+1)+': id je obavezan');
+        if(!tin) missing.push('test #'+(idx+1)+': in je obavezan');
+        if(!tout) missing.push('test #'+(idx+1)+': out je obavezan');
+        if(missing.length) return null;
+        return { id, in: tin, out: tout };
+      }
+      function normalizeSample(s, idx, missing){
+        if(!s || typeof s !== 'object'){ missing.push('sample #'+(idx+1)+': mora biti objekat'); return null; }
+        const input = (s.input||'').trim();
+        const output = (s.output||'').trim();
+        if(!input) missing.push('sample #'+(idx+1)+': input je obavezan');
+        if(!output) missing.push('sample #'+(idx+1)+': output je obavezan');
+        if(missing.length) return null;
+        return { input, output };
+      }
+      function validateProblemPayload(obj){
+        const missing = [];
+        if(!obj || typeof obj !== 'object'){ return { ok:false, missing:['Koren JSON-a mora biti objekat'] }; }
+        const id = (obj.id||'').trim();
+        const title = (obj.title||'').trim();
+        const difficulty = Number(obj.difficulty);
+        const tags = Array.isArray(obj.tags) ? obj.tags.map(t=>(t||'').toString().trim()).filter(Boolean) : [];
+        const timeLimit = Number(obj.timeLimit);
+        const memoryLimit = Number(obj.memoryLimit);
+        const statement = (obj.statement||'').trim();
+        if(!id) missing.push('id (string)');
+        if(!title) missing.push('title (string)');
+        if(!Number.isFinite(difficulty) || difficulty<=0) missing.push('difficulty (broj > 0)');
+        if(!Number.isFinite(timeLimit) || timeLimit<=0) missing.push('timeLimit (broj > 0)');
+        if(!Number.isFinite(memoryLimit) || memoryLimit<=0) missing.push('memoryLimit (broj > 0)');
+        if(!statement) missing.push('statement (string)');
+        const samplesRaw = Array.isArray(obj.samples) ? obj.samples : [];
+        if(!samplesRaw.length) missing.push('samples (niz sa bar jednim sample-om)');
+        const samples = [];
+        samplesRaw.forEach((s,i)=>{
+          const norm = normalizeSample(s,i,missing);
+          if(norm) samples.push(norm);
+        });
+        const testsRaw = Array.isArray(obj.tests) ? obj.tests : [];
+        if(!testsRaw.length) missing.push('tests (niz sa bar jednim testom)');
+        const tests = [];
+        testsRaw.forEach((t,i)=>{
+          const norm = normalizeTestCase(t,i,missing);
+          if(norm) tests.push(norm);
+        });
+        if(!samples.length) missing.push('samples: nijedan sample nije prosao validaciju');
+        if(!tests.length) missing.push('tests: nijedan test nije prosao validaciju');
+        if(missing.length) return { ok:false, missing };
+        return { ok:true, data:{ id, title, difficulty, tags, timeLimit, memoryLimit, statement, samples, tests } };
+      }
       table?.querySelectorAll('[data-edit-problem]')?.forEach(btn=>{
         btn.addEventListener('click', ()=>{
           const id = btn.getAttribute('data-edit-problem');
@@ -148,6 +210,38 @@ export function AdminProblemsView(){
           alert('Zadatak obrisan.');
           location.hash = '#/problemset';
         });
+      });
+      async function importProblemFromFile(file){
+        try{
+          const text = await file.text();
+          const parsed = JSON.parse(text);
+          const result = validateProblemPayload(parsed);
+          if(!result.ok){
+            alert('Import nije uspeo:\\n- ' + result.missing.join('\\n- '));
+            return;
+          }
+          const { id, title, difficulty, tags, timeLimit, memoryLimit, statement, samples, tests } = result.data;
+          showForm(null);
+          form.id.value = id;
+          form.id.disabled = false;
+          form.title.value = title;
+          form.difficulty.value = difficulty;
+          form.tags.value = tags.join(', ');
+          form.timeLimit.value = timeLimit;
+          form.memoryLimit.value = memoryLimit;
+          form.statement.value = statement;
+          samplesWrap.innerHTML = '';
+          testsWrap.innerHTML = '';
+          samples.forEach(s=> addSample(s));
+          tests.forEach(t=> addTest(t));
+          alert('Zadatak importovan. Proverite podatke pre cuvanja.');
+        }catch(err){
+          alert('Import nije uspeo: '+(err?.message||err));
+        }
+      }
+      importProblemInput?.addEventListener('change',(e)=>{
+        const f = e.target.files?.[0];
+        if(f) importProblemFromFile(f);
       });
       form?.addEventListener('submit',(e)=>{
         e.preventDefault();

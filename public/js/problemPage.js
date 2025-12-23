@@ -119,13 +119,31 @@ function main() {
         const expected = String(tests[i].out || '').trim();
         const ms = Math.round(t1 - t0);
         const ok = !stderr && stdout === expected;
-        results.push({ idx: i + 1, ok, ms, stdout, expected, stderr, isSample: !!tests[i].isSample });
+        results.push({
+          idx: i + 1,
+          ok,
+          rawMs: ms,
+          stdout,
+          expected,
+          stderr,
+          isSample: !!tests[i].isSample,
+          testId: tests[i].id || ''
+        });
         if (!ok) {
           verdict = 'WA';
           firstFail = results[results.length - 1];
           break;
         }
       }
+
+      // Novi nacin racunanja vremena: sample = 0 ms; ostalo = (raw - baseline), min 1 ms ako negativno.
+      const sampleBaseline = Math.max(0, ...results.filter((r) => r.isSample).map((r) => r.rawMs || 0), 0);
+      results.forEach((r) => {
+        r.ms = r.isSample ? 0 : Math.max(1, (r.rawMs || 0) - sampleBaseline);
+      });
+      const longestAdjusted = Math.max(0, ...results.filter((r) => !r.isSample).map((r) => r.ms || 0), 0);
+      const adjustedRuntime = Math.max(1, longestAdjusted);
+      firstFail = results.find((r) => !r.ok) || null;
 
       if (firstFail) {
         if (verdictEl) verdictEl.innerHTML =
@@ -134,7 +152,9 @@ function main() {
           (firstFail.isSample ? ' (primer)' : '') +
           ' (' +
           firstFail.ms +
-          ' ms)</p>' +
+          ' ms) -' +
+          (firstFail.testId || '') +
+          '</p>' +
           (firstFail.stderr ? '<pre>' + escapeHtml(firstFail.stderr) + '</pre>' : '') +
           '<pre>Očekivano:\\n' +
           escapeHtml(firstFail.expected) +
@@ -144,7 +164,7 @@ function main() {
           '</pre>' +
           renderSummary(results);
       } else {
-        if (verdictEl) verdictEl.innerHTML = '<p class="status ac">Accepted (' + (results.at(-1)?.ms || 0) + ' ms)</p>' + renderSummary(results);
+        if (verdictEl) verdictEl.innerHTML = '<p class="status ac">Accepted (' + adjustedRuntime + ' ms)</p>' + renderSummary(results);
       }
       saveSubmission(verdict, firstFail ? 'WA na testu #' + firstFail.idx : 'Accepted');
 
