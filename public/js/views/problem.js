@@ -49,23 +49,39 @@ export function ProblemView({ params }) {
       ` : ''}
     </div>
 
-    <div class="panel">
-      <h3>Predaja rešenja</h3>
+        <div class="panel">
+      <h3>Predaja re?enja</h3>
       ${me ? `
-      <p class="muted">C++ Piston API; test primeri se izvršavaju redom do prve greške.</p>
+      <p class="muted">Piston API; izaberi jezik, test primeri se izvr?avaju redom do prve gre?ke.</p>
       <form id="submitForm">
         <div class="row">
           <label>Kod</label>
-          <textarea name="source" rows="36" placeholder="Unesite C++ kod ovde"></textarea>
+          <textarea name="source" rows="36" placeholder="Unesite kod ovde"></textarea>
+        </div>
+        <div class="row">
+          <label>Jezik</label>
+          <select name="language" style="max-width:240px">
+            <option value="cpp" selected>C++ (10.2.0)</option>
+            <option value="python">Python (3.10.0)</option>
+          </select>
         </div>
         <div class="row">
           <label></label>
-          <button class="btn primary" type="submit">Pošalji</button>
+          <button class="term-btn primary" type="submit" data-text="Pošalji">
+            <canvas class="bits" width="240" height="56"></canvas>
+            <div class="line">
+              <span class="prompt">$</span>
+              <span class="output">Pošalji</span>
+              <span class="caret" aria-hidden="true"></span>
+            </div>
+            <div class="subline">Spremno</div>
+          </button>
         </div>
       </form>
       <div id="verdict"></div>
-      ` : `<p>Morate biti prijavljeni da biste predali rešenje. <a href="#/login">Prijava</a></p>`}
+      ` : `<p>Morate biti prijavljeni da biste predali re?enje. <a href="#/login">Prijava</a></p>`}
     </div>
+</div>
   </section>
 
   <script id="problemData" type="application/json">${escapeHtml(JSON.stringify({

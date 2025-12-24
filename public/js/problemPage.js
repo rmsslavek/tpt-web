@@ -86,7 +86,67 @@ function main() {
       }
     const data = Object.fromEntries(new FormData(form).entries());
     const code = data.source || '';
-    if (verdictEl) verdictEl.innerHTML = '<p class="status pd">Pokrećem Piston...</p>';
+    const langKey = (data.language || 'cpp').toLowerCase();
+    const langMap = {
+      cpp: { language: 'cpp', version: '10.2.0', fileName: 'main.cpp' },
+      python: { language: 'python', version: '3.10.0', fileName: 'main.py' },
+    };
+    const langCfg = langMap[langKey] || langMap.cpp;
+
+    let animTimer = null;
+    let bitTimer = null;
+    let dotCount = 0;
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const bitsCanvas = submitBtn?.querySelector('.bits');
+    const bitsCtx = bitsCanvas ? bitsCanvas.getContext('2d') : null;
+
+    const clearBits = () => {
+      if (bitsCtx && bitsCanvas) {
+        bitsCtx.clearRect(0, 0, bitsCanvas.width, bitsCanvas.height);
+      }
+    };
+
+    const stopAnim = () => {
+      if (animTimer) clearInterval(animTimer);
+      if (bitTimer) clearInterval(bitTimer);
+      animTimer = null;
+      bitTimer = null;
+      dotCount = 0;
+      clearBits();
+      if (submitBtn) {
+        submitBtn.classList.remove('loading');
+        submitBtn.disabled = false;
+      }
+    };
+
+    const startBits = () => {
+      if (!bitsCtx || !bitsCanvas) return;
+      bitTimer = setInterval(() => {
+        bitsCtx.fillStyle = 'rgba(0,0,0,0.08)';
+        bitsCtx.fillRect(0, 0, bitsCanvas.width, bitsCanvas.height);
+        const x = Math.random() * bitsCanvas.width;
+        const y = Math.random() * bitsCanvas.height;
+        bitsCtx.fillStyle = '#00ff99';
+        bitsCtx.font = '16px monospace';
+        bitsCtx.fillText(Math.random() > 0.5 ? '1' : '0', x, y);
+      }, 80);
+    };
+
+    const startAnim = () => {
+      dotCount = 0;
+      if (submitBtn) {
+        submitBtn.classList.add('loading');
+        submitBtn.disabled = true;
+      }
+      if (verdictEl) verdictEl.innerHTML = '<p class="status pd">$ testiram kod</p>';
+      startBits();
+      animTimer = setInterval(() => {
+        dotCount = dotCount >= 35 ? 1 : dotCount + 1;
+        const dots = '.'.repeat(dotCount);
+        if (verdictEl) verdictEl.innerHTML = '<p class="status pd">$ testiram kod' + dots + '</p>';
+      }, 1000);
+    };
+    startAnim();
 
       let verdict = 'AC';
       const results = [];
@@ -99,15 +159,16 @@ function main() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              language: 'cpp',
-              version: '10.2.0',
-              files: [{ name: 'main.cpp', content: code }],
+              language: langCfg.language,
+              version: langCfg.version,
+              files: [{ name: langCfg.fileName, content: code }],
               stdin: tests[i].in || '',
             }),
           });
           resp = await res.json();
         } catch (err) {
           console.error('Piston fetch error', err);
+          stopAnim();
           if (verdictEl) verdictEl.innerHTML = '<p class="status wa">Greška u pozivu Piston API-ja</p><pre>' + String(err) + '</pre>';
           saveSubmission('CE', 'Piston API error');
           return;
@@ -146,6 +207,7 @@ function main() {
       firstFail = results.find((r) => !r.ok) || null;
 
       if (firstFail) {
+        stopAnim();
         if (verdictEl) verdictEl.innerHTML =
           '<p class="status wa">Wrong Answer na testu #' +
           firstFail.idx +
@@ -164,6 +226,7 @@ function main() {
           '</pre>' +
           renderSummary(results);
       } else {
+        stopAnim();
         if (verdictEl) verdictEl.innerHTML = '<p class="status ac">Accepted (' + adjustedRuntime + ' ms)</p>' + renderSummary(results);
       }
       saveSubmission(verdict, firstFail ? 'WA na testu #' + firstFail.idx : 'Accepted');
@@ -174,7 +237,7 @@ function main() {
           id: 'S' + Date.now(),
           problemId: problem.id,
           time: Date.now(),
-          lang: 'cpp',
+          lang: langCfg.language,
           verdict: code,
           verdictText: text,
           length: (data.source || '').length,
