@@ -5,11 +5,12 @@ export function SubmissionsView(){
   return `
   <section class="panel">
     <h2>Predaje</h2>
+    <div id="submissionDetail"></div>
     <table class="table">
       <thead><tr><th>ID</th><th>Vreme</th><th>Autor</th><th>Zadatak</th><th>Jezik</th><th>Rezultat</th><th>Dužina</th></tr></thead>
       <tbody>
         ${subs.map(s=>`<tr>
-          <td>${s.id}</td>
+          <td><a href="javascript:void(0)" data-sub-id="${s.id}">${s.id}</a></td>
           <td>${new Date(s.time).toLocaleString()}</td>
           <td><a href="#/profile/${s.handle}">${s.handle}</a></td>
           <td><a href="#/problem/${s.problemId}">${s.problemId}</a></td>
@@ -19,6 +20,36 @@ export function SubmissionsView(){
         </tr>`).join('')}
       </tbody>
     </table>
+    <script>
+      (function(){
+        const subs = ${JSON.stringify(subs || [])};
+        const detail = document.getElementById('submissionDetail');
+        const rows = document.querySelectorAll('[data-sub-id]');
+        function esc(str){ return String(str||'').replace(/[&<>]/g, c=> ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+        function render(sub){
+          if(!detail) return;
+          if(!sub){
+            detail.innerHTML = '<p class="muted">Nema detalja.</p>';
+            return;
+          }
+          const code = esc(sub.source||'');
+          detail.innerHTML =
+            '<div class="panel" style="margin:0 0 .8rem">' +
+            '<h3>Predaja ' + esc(sub.id) + '</h3>' +
+            '<p class="muted">Problem: ' + esc(sub.problemId) + ' | Autor: ' + esc(sub.handle) + ' | Jezik: ' + esc(sub.lang) + ' | ' + new Date(sub.time).toLocaleString() + '</p>' +
+            '<p class="status ' + (sub.verdict==='AC' ? 'ac' : (sub.verdict==='WA' ? 'wa' : 'pd')) + '">' + esc(sub.verdictText) + '</p>' +
+            '<pre style="white-space:pre-wrap">' + code + '</pre>' +
+            '</div>';
+        }
+        rows.forEach(a=>{
+          a.addEventListener('click', ()=>{
+            const id = a.getAttribute('data-sub-id');
+            const found = subs.find(x=>x.id===id);
+            render(found);
+          });
+        });
+      })();
+    </script>
   </section>`;
 }
 

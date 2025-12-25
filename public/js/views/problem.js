@@ -41,8 +41,17 @@ export function ProblemView({ params }) {
         <h3>Test primeri (admin)</h3>
         <div id="testsAdmin"></div>
         <form id="addTestForm" style="display:grid;gap:.5rem;margin-top:.6rem">
-          <label>Ulaz<br><textarea name="input" rows="12" required></textarea></label>
-          <label>Očekivani izlaz<br><textarea name="output" rows="12" required></textarea></label>
+          <label>ID testa<br><input name="id" placeholder="npr. Tnew" /></label>
+          <label><input type="checkbox" name="stress" /> Stress test (veliki ulaz/izlaz)</label>
+          <div data-stress-off>
+            <label>Ulaz<br><textarea name="input" rows="12"></textarea></label>
+            <label>Očekivani izlaz<br><textarea name="output" rows="12"></textarea></label>
+          </div>
+          <div data-stress-on style="display:none;gap:.4rem;flex-wrap:wrap">
+            <label>Upload ulaza (.txt)<br><input type="file" name="inputFile" accept=".txt" /></label>
+            <label>Upload izlaza (.txt)<br><input type="file" name="outputFile" accept=".txt" /></label>
+            <p class="muted" style="font-size:12px;margin:0">Sadržaj se čuva kao inXX.txt / outXX.txt ako je velik.</p>
+          </div>
           <button class="btn" type="submit">Dodaj test</button>
         </form>
       </div>

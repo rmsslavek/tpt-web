@@ -118,17 +118,66 @@ export function AdminProblemsView(){
         const div = document.createElement('div');
         div.className = 'panel';
         div.style.margin = '.4rem 0';
-        div.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem"><strong>Test</strong><button type="button" class="btn warn" data-remove>Obrisi</button></div>'
+        div.innerHTML =
+          '<div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem"><strong>Test</strong><button type="button" class="btn warn" data-remove>Obrisi</button></div>'
           + '<label>ID testa<input name="testId" placeholder="npr. T1" required /></label>'
-          + '<label>Ulaz<textarea name="testIn" rows="3" required></textarea></label>'
-          + '<label>Izlaz<textarea name="testOut" rows="3" required></textarea></label>';
-        div.querySelector('[data-remove]').addEventListener('click', ()=> div.remove());
+          + '<label><input type="checkbox" name="testStress" /> Stress test (veliki ulaz/izlaz)</label>'
+          + '<div data-stress-off>'
+            + '<label>Ulaz<textarea name="testIn" rows="3"></textarea></label>'
+            + '<label>Izlaz<textarea name="testOut" rows="3"></textarea></label>'
+          + '</div>'
+          + '<div data-stress-on style="display:none;gap:.4rem;flex-wrap:wrap">'
+            + '<label>Upload ulaza (.txt)<input type="file" name="testInFile" accept=".txt" /></label>'
+            + '<label>Upload izlaza (.txt)<input type="file" name="testOutFile" accept=".txt" /></label>'
+            + '<div class="muted" style="font-size:12px">Sadrzaj se cuva kao inXX.txt / outXX.txt</div>'
+          + '</div>';
+        const removeBtn = div.querySelector('[data-remove]');
+        const stressChk = div.querySelector('[name="testStress"]');
+        const stressOn = div.querySelector('[data-stress-on]');
+        const stressOff = div.querySelector('[data-stress-off]');
+        const syncStress = ()=>{
+          const on = stressChk.checked;
+          stressOn.style.display = on ? 'flex' : 'none';
+          stressOff.style.display = on ? 'none' : 'block';
+          const inArea = div.querySelector('[name="testIn"]');
+          const outArea = div.querySelector('[name="testOut"]');
+          if(on){
+            inArea.required = false;
+            outArea.required = false;
+          }else{
+            inArea.required = true;
+            outArea.required = true;
+          }
+        };
+        stressChk.addEventListener('change', syncStress);
+        removeBtn.addEventListener('click', ()=> div.remove());
         testsWrap.appendChild(div);
         if(prefill){
           div.querySelector('[name=\"testId\"]').value = prefill.id||'';
-          div.querySelector('[name=\"testIn\"]').value = prefill.in||'';
-          div.querySelector('[name=\"testOut\"]').value = prefill.out||'';
+          const inArea = div.querySelector('[name=\"testIn\"]');
+          const outArea = div.querySelector('[name=\"testOut\"]');
+          const inVal = prefill.in || '';
+          const outVal = prefill.out || '';
+          const inBig = inVal.length > 2000;
+          const outBig = outVal.length > 2000;
+          if(inBig){
+            inArea.placeholder = 'Sacuvano u ' + (prefill.inputFile||'inXX.txt') + ' (~' + inVal.length + ' chars)';
+            div.dataset.inBackup = inVal;
+          }else{
+            inArea.value = inVal;
+          }
+          if(outBig){
+            outArea.placeholder = 'Sacuvano u ' + (prefill.outputFile||'outXX.txt') + ' (~' + outVal.length + ' chars)';
+            div.dataset.outBackup = outVal;
+          }else{
+            outArea.value = outVal;
+          }
+          if(prefill.isStress){
+            stressChk.checked = true;
+            syncStress();
+          }
         }
+        syncStress();
       }
       addSampleBtn?.addEventListener('click', ()=> addSample());
       addTestBtn?.addEventListener('click', ()=> addTest());
@@ -273,10 +322,11 @@ export function AdminProblemsView(){
         const f = e.target.files?.[0];
         if(f) importProblemFromFile(f);
       });
-      form?.addEventListener('submit',(e)=>{
+      form?.addEventListener('submit', async (e)=>{
         e.preventDefault();
         const data = new FormData(form);
-        const id = (data.get('id')||'').trim();
+        const formIdVal = (data.get('id')||'').trim();
+        const effectiveId = state.editingId || formIdVal;
         const title = (data.get('title')||'').trim();
         const diff = Number(data.get('difficulty'))||800;
         const tags = (data.get('tags')||'').split(',').map(t=>t.trim()).filter(Boolean);
@@ -290,13 +340,37 @@ export function AdminProblemsView(){
           if(input && output) samples.push({ input, output });
         });
         const tests = [];
-        testsWrap.querySelectorAll('.panel').forEach(div=>{
+        const downloads = [];
+        const testPanels = Array.from(testsWrap.querySelectorAll('.panel'));
+        for(let idx=0; idx<testPanels.length; idx++){
+          const div = testPanels[idx];
           const tid = (div.querySelector('[name=\"testId\"]')?.value||'').trim();
-          const tin = (div.querySelector('[name=\"testIn\"]')?.value||'').trim();
-          const tout = (div.querySelector('[name=\"testOut\"]')?.value||'').trim();
-          if(tid && tin && tout) tests.push({ id: tid, in: tin, out: tout });
-        });
-        if(!id || !title || !statement){ alert('Popunite sifru, naziv i tekst zadatka.'); return; }
+          const stress = div.querySelector('[name=\"testStress\"]')?.checked;
+          const tinArea = div.querySelector('[name=\"testIn\"]');
+          const toutArea = div.querySelector('[name=\"testOut\"]');
+          const tinFile = div.querySelector('[name=\"testInFile\"]')?.files?.[0];
+          const toutFile = div.querySelector('[name=\"testOutFile\"]')?.files?.[0];
+          let tin = (tinArea?.value||'').trim();
+          let tout = (toutArea?.value||'').trim();
+          if(stress){
+            if(!tin && div.dataset.inBackup) tin = div.dataset.inBackup;
+            if(!tout && div.dataset.outBackup) tout = div.dataset.outBackup;
+            if(tinFile) tin = await tinFile.text();
+            if(toutFile) tout = await toutFile.text();
+            if(!tin || !tout){ alert('Za stress test '+(tid||('#'+(idx+1)))+' dodajte ulaz i izlaz (upload ili tekst).'); return; }
+            const order = String(idx+1).padStart(2,'0');
+            const inName = 'in'+order+'.txt';
+            const outName = 'out'+order+'.txt';
+            tests.push({ id: tid||('T'+(idx+1)), in: tin, out: tout, isStress:true, inputFile: inName, outputFile: outName });
+            if(tin.length>1000) downloads.push({ name: inName, content: tin });
+            if(tout.length>1000) downloads.push({ name: outName, content: tout });
+          }else{
+            if(tid && tin && tout){
+              tests.push({ id: tid, in: tin, out: tout });
+            }
+          }
+        }
+        if(!effectiveId || !title || !statement){ alert('Popunite sifru, naziv i tekst zadatka.'); return; }
         if(!samples.length){ alert('Dodajte barem jedan sample.'); return; }
         if(!tests.length){ alert('Dodajte barem jedan test.'); return; }
         const list = JSON.parse(localStorage.getItem('ca_problems')||'[]');
@@ -305,13 +379,26 @@ export function AdminProblemsView(){
           if(idx===-1){ alert('Zadatak vise ne postoji.'); return; }
           list[idx] = { ...list[idx], id: state.editingId, title, difficulty: diff, tags, timeLimit, memoryLimit, statement, samples, tests };
         }else{
-          if(list.some(p=>p.id.toLowerCase()===id.toLowerCase())){ alert('Sifra je vec u upotrebi.'); return; }
-          list.push({ id, title, difficulty: diff, tags, timeLimit, memoryLimit, statement, samples, tests });
+          if(list.some(p=>p.id.toLowerCase()===effectiveId.toLowerCase())){ alert('Sifra je vec u upotrebi.'); return; }
+          list.push({ id: effectiveId, title, difficulty: diff, tags, timeLimit, memoryLimit, statement, samples, tests });
         }
         localStorage.setItem('ca_problems', JSON.stringify(list));
+        downloads.forEach(f=> downloadFile(f.name, f.content));
         alert('Sacuvano.');
-        location.hash = '#/problem/'+id;
+        location.hash = '#/problem/'+effectiveId;
       });
+
+      function downloadFile(name, content){
+        const blob = new Blob([content], { type:'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
     })();
   </script>`;
 }

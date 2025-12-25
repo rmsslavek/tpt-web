@@ -21,12 +21,51 @@ function main() {
 
   if (adminBox) {
     renderTestsAdmin();
-    addTestForm?.addEventListener('submit', (e) => {
+    const stressChk = addTestForm?.querySelector('[name="stress"]');
+    const stressOn = addTestForm?.querySelector('[data-stress-on]');
+    const stressOff = addTestForm?.querySelector('[data-stress-off]');
+    const syncStress = () => {
+      const on = stressChk?.checked;
+      if (stressOn) stressOn.style.display = on ? 'flex' : 'none';
+      if (stressOff) stressOff.style.display = on ? 'none' : 'block';
+    };
+    stressChk?.addEventListener('change', syncStress);
+    syncStress();
+    addTestForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const data = Object.fromEntries(new FormData(addTestForm).entries());
-      tests.push({ id: 'T' + Date.now(), in: data.input || '', out: data.output || '' });
+      const fd = new FormData(addTestForm);
+      const id = (fd.get('id') || ('T' + Date.now())).toString().trim();
+      const stress = fd.get('stress') === 'on';
+      let input = (fd.get('input') || '').toString();
+      let output = (fd.get('output') || '').toString();
+      if (stress) {
+        const inputFile = fd.get('inputFile');
+        const outputFile = fd.get('outputFile');
+        if (inputFile && inputFile.text) input = await inputFile.text();
+        if (outputFile && outputFile.text) output = await outputFile.text();
+        if (!input || !output) {
+          alert('Za stress test dodajte ulaz i izlaz (upload ili tekst).');
+          return;
+        }
+        const order = String(tests.length + 1).padStart(2, '0');
+        tests.push({
+          id: id || 'T' + Date.now(),
+          in: input,
+          out: output,
+          isStress: true,
+          inputFile: 'in' + order + '.txt',
+          outputFile: 'out' + order + '.txt',
+        });
+      } else {
+        if (!input || !output) {
+          alert('Popunite ulaz i izlaz testa.');
+          return;
+        }
+        tests.push({ id: id || 'T' + Date.now(), in: input, out: output });
+      }
       persistTests(tests);
       addTestForm.reset();
+      syncStress();
       renderTestsAdmin();
     });
   }
@@ -42,6 +81,13 @@ function main() {
 
   function renderTestsAdmin() {
     if (!adminBox) return;
+    const fmtBlock = (label, content, fileName) => {
+      const big = (content || '').length > 2048;
+      if (big) {
+        return '<pre style="white-space:pre-wrap">FILE ' + (fileName || '') + ' (~' + (content||'').length + ' chars)</pre>';
+      }
+      return '<pre style="white-space:pre-wrap">' + label + ':\\n' + escapeHtml(content || '') + '</pre>';
+    };
     adminBox.innerHTML =
       tests.length
         ? tests
@@ -51,12 +97,8 @@ function main() {
                 '<div class="muted">ID: ' +
                 t.id +
                 '</div>' +
-                '<pre style="white-space:pre-wrap">INPUT:\\n' +
-                escapeHtml(t.in || '') +
-                '</pre>' +
-                '<pre style="white-space:pre-wrap">OUTPUT:\\n' +
-                escapeHtml(t.out || '') +
-                '</pre>' +
+                fmtBlock('INPUT', t.in, t.inputFile) +
+                fmtBlock('OUTPUT', t.out, t.outputFile) +
                 '<button class="btn warn" data-del="' +
                 t.id +
                 '">Ukloni</button>' +
@@ -208,23 +250,31 @@ function main() {
 
       if (firstFail) {
         stopAnim();
-        if (verdictEl) verdictEl.innerHTML =
-          '<p class="status wa">Wrong Answer na testu #' +
-          firstFail.idx +
-          (firstFail.isSample ? ' (primer)' : '') +
-          ' (' +
-          firstFail.ms +
-          ' ms) -' +
-          (firstFail.testId || '') +
-          '</p>' +
-          (firstFail.stderr ? '<pre>' + escapeHtml(firstFail.stderr) + '</pre>' : '') +
-          '<pre>Očekivano:\\n' +
-          escapeHtml(firstFail.expected) +
-          '</pre>' +
-          '<pre>Dobijeno:\\n' +
-          escapeHtml(firstFail.stdout) +
-          '</pre>' +
-          renderSummary(results);
+        if (verdictEl) {
+          let msg =
+            '<p class="status wa">Wrong Answer na testu #' +
+            firstFail.idx +
+            (firstFail.isSample ? ' (primer)' : '') +
+            ' (' +
+            firstFail.ms +
+            ' ms) -' +
+            (firstFail.testId || '') +
+            '</p>';
+          if (firstFail.stderr) {
+            msg += '<p class="status wa">Greška izvršavanja:</p><pre>' + escapeHtml(firstFail.stderr) + '</pre>';
+          } else {
+            msg += '<p class="status wa">WA: izlaz ne odgovara očekivanom.</p>';
+          }
+          msg +=
+            '<pre>Očekivano:\\n' +
+            escapeHtml(firstFail.expected) +
+            '</pre>' +
+            '<pre>Dobijeno:\\n' +
+            escapeHtml(firstFail.stdout) +
+            '</pre>' +
+            renderSummary(results);
+          verdictEl.innerHTML = msg;
+        }
       } else {
         stopAnim();
         if (verdictEl) verdictEl.innerHTML = '<p class="status ac">Accepted (' + adjustedRuntime + ' ms)</p>' + renderSummary(results);
@@ -233,7 +283,7 @@ function main() {
 
       function saveSubmission(code, text) {
         const store = JSON.parse(localStorage.getItem('ca_submissions') || '[]');
-        store.unshift({
+        const submission = {
           id: 'S' + Date.now(),
           problemId: problem.id,
           time: Date.now(),
@@ -242,8 +292,32 @@ function main() {
           verdictText: text,
           length: (data.source || '').length,
           handle: (currentUser()?.handle || 'guest'),
-        });
+          source: data.source || '',
+        };
+        store.unshift(submission);
         localStorage.setItem('ca_submissions', JSON.stringify(store));
+        try{
+          const lastMap = JSON.parse(localStorage.getItem('ca_last_code') || '{}');
+          const existing = lastMap[problem.id];
+          const isAc = code === 'AC';
+          const existingIsAc = existing?.verdict === 'AC';
+          if(isAc || !existingIsAc){
+            lastMap[problem.id] = {
+              id: submission.id,
+              problemId: submission.problemId,
+              time: submission.time,
+              lang: submission.lang,
+              verdict: submission.verdict,
+              verdictText: submission.verdictText,
+              length: submission.length,
+              handle: submission.handle,
+              source: submission.source,
+            };
+            localStorage.setItem('ca_last_code', JSON.stringify(lastMap));
+          }
+        }catch(err){
+          console.warn('Cannot persist last code', err);
+        }
       }
 
       function renderSummary(list) {
