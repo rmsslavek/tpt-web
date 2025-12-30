@@ -1,8 +1,21 @@
-import { currentUser } from '../storage.js';
+import { currentUser, db } from '../storage.js';
 
 export function Navbar(root){
   const render = () => {
     const me = currentUser();
+    const myHandle = (me?.handle||'').toLowerCase();
+    const homeworks = db.homeworks();
+    const statuses = JSON.parse(localStorage.getItem('ca_homework_status')||'[]');
+    const now = Date.now();
+    const pendingHw = me ? homeworks.filter(hw=>{
+      const targets = (hw.assignedHandles && hw.assignedHandles.length) ? hw.assignedHandles.map(x=>x.toLowerCase()) : (hw.assignedHandle ? [hw.assignedHandle.toLowerCase()] : []);
+      const allowed = !targets.length || targets.includes(myHandle);
+      if(!allowed) return false;
+      if(hw.dueAt && hw.dueAt < now) return false;
+      const st = statuses.find(s=> s.hwId===hw.id && s.handle===me.handle);
+      return !st || st.status !== 'done';
+    }).length : 0;
+    const hwBadge = pendingHw>0 ? ` <span class="badge">${pendingHw}</span>` : '';
     root.innerHTML = `
     <nav class="nav" id="navBar">
       <div class="nav-left">
@@ -14,8 +27,8 @@ export function Navbar(root){
       </div>
       <div class="nav-links" id="navLinks">
         <a href="#/problemset">Zadaci</a>
-    ${me?.isAdmin || me?.isProfessor ? `<a href="#/problems/admin">Novi zadatak</a>` : ''}
-    ${me ? `<a href="#/homeworks">Domaci</a>` : ''}
+${me?.isAdmin || me?.isProfessor ? `<a href="#/problems/admin">Novi zadatak</a>` : ''}
+${me ? `<a href="#/homeworks">Domaci${hwBadge}</a>` : ''}
         <a href="#/contests">Takmicenja</a>
         <a href="#/tests">Testovi</a>
     ${(me?.isAdmin || me?.isOwner) ? `<a href="#/admin/accounts" title="Upravljanje nalozima">Nalozi</a>` : ''}
