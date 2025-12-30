@@ -10,6 +10,7 @@ import { RanklistView } from './views/ranklist.js';
 import { TestsListView, TestCreateView, TestRunView, TestEditView, initTestRunPage } from './views/tests.js';
 import { AdminAccountsView } from './views/admin.js';
 import { AdminProblemsView } from './views/adminProblems.js';
+import { HomeworksView } from './views/homeworks.js';
 import { initTermButtons } from './termButton.js';
 
 const DEBUG_DUMP_KEY = 'ca_debug_dump';
@@ -17,7 +18,7 @@ const DEBUG_DUMP_KEY = 'ca_debug_dump';
 const routes = [
   { path: /^#\/?$/, view: HomeView },
   { path: /^#\/problemset\/?$/, view: ProblemsView },
-  { path: /^#\/problem\/([\w-]+)\/?$/, view: ProblemView },
+  { path: /^#\/problem\/([\w-]+)(?:\?.*)?$/, view: ProblemView },
   { path: /^#\/contests\/?$/, view: ContestsView },
   { path: /^#\/contest\/([\w-]+)\/?$/, view: ContestView },
   { path: /^#\/submissions\/?$/, view: SubmissionsView },
@@ -28,9 +29,10 @@ const routes = [
   { path: /^#\/tests\/?$/, view: TestsListView },
   { path: /^#\/tests\/new\/?$/, view: TestCreateView },
   { path: /^#\/tests\/edit\/([\w-]+)\/?$/, view: TestEditView },
-  { path: /^#\/tests\/run\/([\w-]+)\/?$/, view: TestRunView, init: initTestRunPage },
+  { path: /^#\/tests\/run\/([\w-]+)(?:\?.*)?$/, view: TestRunView, init: initTestRunPage },
   { path: /^#\/admin\/accounts\/?$/, view: AdminAccountsView },
   { path: /^#\/problems\/admin\/?$/, view: AdminProblemsView },
+  { path: /^#\/homeworks\/?$/, view: HomeworksView },
 ];
 
 const viewEl = () => document.getElementById('view');

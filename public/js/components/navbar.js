@@ -14,10 +14,11 @@ export function Navbar(root){
       </div>
       <div class="nav-links" id="navLinks">
         <a href="#/problemset">Zadaci</a>
-        ${me?.isAdmin ? `<a href="#/problems/admin">Novi zadatak</a>` : ''}
+    ${me?.isAdmin || me?.isProfessor ? `<a href="#/problems/admin">Novi zadatak</a>` : ''}
+    ${me ? `<a href="#/homeworks">Domaci</a>` : ''}
         <a href="#/contests">Takmicenja</a>
         <a href="#/tests">Testovi</a>
-        ${me?.isAdmin ? `<a href="#/admin/accounts" title="Upravljanje nalozima">Nalozi</a>` : ''}
+    ${(me?.isAdmin || me?.isOwner) ? `<a href="#/admin/accounts" title="Upravljanje nalozima">Nalozi</a>` : ''}
         <a href="#/ranklist">Rang lista</a>
         <a href="#/submissions">Predaje</a>
         <span class="spacer"></span>

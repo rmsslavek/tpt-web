@@ -23,21 +23,33 @@ export function SubmissionsView(){
     <script>
       (function(){
         const subs = ${JSON.stringify(subs || [])};
+        const lastMap = JSON.parse(localStorage.getItem('ca_last_code') || '{}');
         const detail = document.getElementById('submissionDetail');
         const rows = document.querySelectorAll('[data-sub-id]');
         function esc(str){ return String(str||'').replace(/[&<>]/g, c=> ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+        function pickBest(sub){
+          if(!sub) return null;
+          const best = lastMap[sub.problemId];
+          if(!best) return sub;
+          const bestIsAc = best.verdict === 'AC';
+          const currentIsAc = sub.verdict === 'AC';
+          if(bestIsAc) return best; // prikazi poslednji AC
+          if(!currentIsAc) return best; // nema AC, prikazi poslednji zapamceni (moze biti WA)
+          return sub;
+        }
         function render(sub){
           if(!detail) return;
           if(!sub){
             detail.innerHTML = '<p class="muted">Nema detalja.</p>';
             return;
           }
-          const code = esc(sub.source||'');
+          const best = pickBest(sub);
+          const code = esc(best?.source||'');
           detail.innerHTML =
             '<div class="panel" style="margin:0 0 .8rem">' +
             '<h3>Predaja ' + esc(sub.id) + '</h3>' +
             '<p class="muted">Problem: ' + esc(sub.problemId) + ' | Autor: ' + esc(sub.handle) + ' | Jezik: ' + esc(sub.lang) + ' | ' + new Date(sub.time).toLocaleString() + '</p>' +
-            '<p class="status ' + (sub.verdict==='AC' ? 'ac' : (sub.verdict==='WA' ? 'wa' : 'pd')) + '">' + esc(sub.verdictText) + '</p>' +
+            '<p class="status ' + (best?.verdict==='AC' ? 'ac' : (best?.verdict==='WA' ? 'wa' : 'pd')) + '">' + esc(best?.verdictText || sub.verdictText) + (best && best.id!==sub.id ? ' (poslednji sačuvani kod)' : '') + '</p>' +
             '<pre style="white-space:pre-wrap">' + code + '</pre>' +
             '</div>';
         }

@@ -15,7 +15,7 @@ export function TestsListView(){
   const me = db.session();
   const users = db.users();
   const user = me ? users.find(u=>u.handle===me.handle) : null;
-  const isAdmin = !!user?.isAdmin;
+  const isAdmin = !!user?.isAdmin || !!user?.isProfessor;
   const tests = db.tests();
   const isLogged = !!me;
   const visibleTests = tests.filter(t=>{
@@ -28,7 +28,7 @@ export function TestsListView(){
   <section class="panel">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap">
       <h2>Testovi znanja</h2>
-      ${isAdmin ? `<a class="btn primary" href="#/tests/new">Kreiraj novi test</a>` : `<span class="muted">Kreiranje testa je dozvoljeno samo administratorima.</span>`}
+    ${isAdmin ? `<a class="btn primary" href="#/tests/new">Kreiraj novi test</a>` : `<span class="muted">Kreiranje testa je dozvoljeno samo administratorima/profesorima.</span>`}
     </div>
     ${visibleTests.length ? `
       <table class="table" style="margin-top:.6rem">
@@ -289,15 +289,19 @@ export function TestRunView({ params }){
   if(!me){
     return `<div class="panel">Morate biti prijavljeni da biste resavali test. <a href="#/login">Prijavite se</a>.</div>`;
   }
+  const hash = window.location.hash || '';
+  const hwMatch = hash.match(/hw=([^&]+)/);
+  const fromHomework = hwMatch ? decodeURIComponent(hwMatch[1]) : '';
+  const backHref = fromHomework ? '#/homeworks' : '#/tests';
   const test = db.tests().find(t=>t.id===id);
   if(!test){
-    return `<div class="panel">Test nije pronadjen. <a href="#/tests">Nazad</a></div>`;
+    return `<div class="panel">Test nije pronadjen. <a href="${backHref}">Nazad</a></div>`;
   }
   const isAdmin = !!user?.isAdmin;
   if(test.assignedHandle && !isAdmin){
     const target = (test.assignedHandle||'').toLowerCase();
     if((me.handle||'').toLowerCase() !== target){
-      return `<div class="panel">Ovaj test je dostupan samo nalogu ${test.assignedHandle}. <a href="#/tests">Nazad</a></div>`;
+      return `<div class="panel">Ovaj test je dostupan samo nalogu ${test.assignedHandle}. <a href="${backHref}">Nazad</a></div>`;
     }
   }
   return `
@@ -328,7 +332,7 @@ export function TestRunView({ params }){
       <div id="actionRow" style="display:flex;justify-content:flex-end;gap:.6rem;align-items:center">
         <span class="muted">Vreme ograniceno na ${Math.max(1, Math.ceil(test.durationSeconds/60))} min</span>
         <button class="btn primary" type="submit">Zavrsi test</button>
-        <a class="btn" href="#/tests">Nazad</a>
+        <a class="btn" href="${backHref}">Nazad</a>
       </div>
     </form>
     <div id="result" class="panel" style="display:none;margin-top:1rem"></div>

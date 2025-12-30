@@ -5,7 +5,11 @@ export function ProblemView({ params }) {
   const p = db.problems().find((x) => x.id === id);
   if (!p) return `<div class="panel">Zadatak nije pronađen.</div>`;
   const me = currentUser();
-  const isAdmin = !!me?.isAdmin || !!me?.isOwner;
+  const hash = window.location.hash || "";
+  const hwMatch = hash.match(/hw=([^&]+)/);
+  const fromHomework = hwMatch ? decodeURIComponent(hwMatch[1]) : "";
+  const backHref = fromHomework ? "#/homeworks" : "#/problemset";
+  const isAdmin = !!me?.isAdmin || !!me?.isOwner || !!me?.isProfessor;
   const sampleTests = (p.samples || []).map((s, idx) => ({
     id: 'S' + idx,
     in: s.input || '',
@@ -20,6 +24,7 @@ export function ProblemView({ params }) {
         <div style="display:flex;align-items:center;gap:.6rem">
           <h2 style="margin:0">${p.id}. ${p.title}</h2>
           ${isAdmin ? `<a class="btn ghost" href="#/problemset">Lista problema (admin)</a>` : ''}
+          ${fromHomework ? `<a class="btn" href="${backHref}">Nazad na domaci</a>` : ''}
         </div>
         <div class="muted">Težina: ${p.difficulty}</div>
       </div>
@@ -85,7 +90,7 @@ export function ProblemView({ params }) {
             </div>
             <div class="subline">Spremno</div>
           </button>
-        </div>
+        ${fromHomework ? `<div class="row"><label></label><a class="btn" href="${backHref}">Nazad na domaci</a></div>` : ""}
       </form>
       <div id="verdict"></div>
       ` : `<p>Morate biti prijavljeni da biste predali re?enje. <a href="#/login">Prijava</a></p>`}

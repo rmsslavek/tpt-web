@@ -4,8 +4,9 @@ export function AdminProblemsView(){
   const me = db.session();
   const users = db.users();
   const user = me ? users.find(u=>u.handle===me.handle) : null;
-  if(!user?.isAdmin){
-    return `<div class="panel">Ova stranica je dostupna samo administratorima.</div>`;
+  const isEditor = !!user?.isAdmin || !!user?.isProfessor;
+  if(!isEditor){
+    return `<div class="panel">Ova stranica je dostupna samo administratorima i profesorima.</div>`;
   }
   const problems = db.problems();
   return `

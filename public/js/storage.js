@@ -15,6 +15,7 @@ const LS = {
   submissions: 'ca_submissions',
   session: 'ca_session',
   tests: 'ca_tests',
+  homeworks: 'ca_homeworks',
 };
 
 const COLLECTIONS = {
@@ -24,6 +25,7 @@ const COLLECTIONS = {
   submissions: 'submissions',
   tests: 'tests',
   sessions: 'sessions',
+  homeworks: 'homeworks',
 };
 
 const state = {
@@ -32,6 +34,7 @@ const state = {
   contests: [],
   submissions: [],
   tests: [],
+  homeworks: [],
 };
 
 let bridgeInstalled = false;
@@ -59,25 +62,30 @@ function loadLocalState(){
   state.contests = readJson(LS.contests, fallbacks.contests || []);
   state.submissions = readJson(LS.submissions, []);
   state.tests = withDefaultTests(readJson(LS.tests, fallbacks.tests || []), fallbacks.tests);
+  state.homeworks = (readJson(LS.homeworks, fallbacks.homeworks || []) || []).map(normalizeHomework);
 }
 
 async function fetchClientIp(){
-  const controller = new AbortController();
-  const timer = setTimeout(()=>controller.abort(), 3000);
-  try{
-    const res = await fetch('https://api.ipify.org?format=json', { signal: controller.signal });
-    const data = await res.json().catch(()=> ({}));
-    if(data?.ip) cachedIp = data.ip;
-    return data?.ip || cachedIp;
-  }catch(_){
-    return cachedIp;
-  }finally{
-    clearTimeout(timer);
-  }
+  // CSP blokira spoljne pozive; koristi keš ili fallback
+  return cachedIp || '127.0.0.1';
 }
 
 function normalizeProblem(p){
   return { ...p, tests: Array.isArray(p.tests) ? p.tests : [] };
+}
+
+function normalizeHomework(hw){
+  return {
+    id: hw.id,
+    title: hw.title || '',
+    creator: hw.creator || '',
+    assignedHandle: hw.assignedHandle || '',
+    assignedHandles: Array.isArray(hw.assignedHandles) ? hw.assignedHandles : (hw.assignedHandle ? [hw.assignedHandle] : []),
+    problems: Array.isArray(hw.problems) ? hw.problems : [],
+    tests: Array.isArray(hw.tests) ? hw.tests : [],
+    dueAt: typeof hw.dueAt === 'number' ? hw.dueAt : (hw.dueAt ? Number(hw.dueAt) : null),
+    createdAt: hw.createdAt || Date.now(),
+  };
 }
 
 async function fetchCollection(name) {
@@ -111,6 +119,7 @@ async function seedIfEmpty() {
   if (isEmpty('users', state.users.length)) tasks.push(replaceCollection(COLLECTIONS.users, withDefaultSystemUsers(F.users), 'handle'));
   if (isEmpty('tests', state.tests.length)) tasks.push(replaceCollection(COLLECTIONS.tests, withDefaultTests([], F.tests), 'id'));
   if (isEmpty('submissions', state.submissions.length)) tasks.push(replaceCollection(COLLECTIONS.submissions, [], 'id'));
+  if (isEmpty('homeworks', state.homeworks.length)) tasks.push(replaceCollection(COLLECTIONS.homeworks, F.homeworks || [], 'id'));
   if (tasks.length) {
     await Promise.all(tasks);
     await loadFromFirestore();
@@ -226,11 +235,11 @@ export async function recordUserAccess(handle){
   const idx = state.users.findIndex(u=> (u.handle||'').toLowerCase() === String(handle).toLowerCase());
   if(idx<0) return;
   const now = Date.now();
-  const ip = await fetchClientIp();
+  const ip = (await fetchClientIp()) || '127.0.0.1';
   const updated = { ...state.users[idx] };
   if(!updated.firstSeen) updated.firstSeen = now;
   updated.lastSeen = now;
-  if(ip) updated.lastIp = ip;
+  updated.lastIp = ip;
   state.users[idx] = updated;
   db.saveUsers(state.users);
 }
@@ -246,6 +255,7 @@ export function setUserDisabled(handle, disabled){
 if (typeof window !== 'undefined') {
   window.recordUserAccess = recordUserAccess;
   window.setUserDisabled = setUserDisabled;
+  window.setUserProfessor = setUserProfessor;
 }
 
 export const db = {
@@ -266,6 +276,9 @@ export const db = {
 
   tests(){ return state.tests; },
   saveTests(v){ localStorage.setItem(LS.tests, JSON.stringify(v)); },
+
+  homeworks(){ return state.homeworks; },
+  saveHomeworks(v){ localStorage.setItem(LS.homeworks, JSON.stringify(v)); },
 };
 
 export function currentUser(){ return findUser(db.session()?.handle || ''); }
@@ -273,10 +286,7 @@ export function requireAuth(){ if(!currentUser()) location.hash = '#/login'; }
 
 export function findUser(handle){ return state.users.find(u=>u.handle.toLowerCase()===handle.toLowerCase()); }
 export function isAdminHandle(handle){ const u = findUser(handle||''); return !!u?.isAdmin; }
-
-if (typeof window !== 'undefined') {
-  window.recordUserAccess = recordUserAccess;
-}
+export function isProfessorHandle(handle){ const u = findUser(handle||''); return !!u?.isProfessor || !!u?.isAdmin || !!u?.isOwner; }
 
 function withDefaultSystemUsers(list){
   const users = Array.isArray(list) ? [...list] : [];
@@ -289,6 +299,7 @@ function withDefaultSystemUsers(list){
       org:'CodeArena',
       email:'slavisa.radovic@gmail.com',
       isAdmin:true,
+      isProfessor:true,
       isOwner:true,
       hidden:true,
       disabled:false
@@ -301,6 +312,7 @@ function withDefaultSystemUsers(list){
       org:'',
       email:'',
       isAdmin:false,
+      isProfessor:false,
       hidden:true,
       disabled:false
     }
@@ -314,6 +326,16 @@ function withDefaultSystemUsers(list){
       users.push(template);
     }
   });
+  // ensure admin implies professor
+  return users.map(u=> ({ ...u, isProfessor: u.isProfessor || u.isAdmin || u.isOwner || false }));
+}
+
+export function setUserProfessor(handle, val){
+  const users = db.users();
+  const idx = users.findIndex(u=>u.handle.toLowerCase()===handle.toLowerCase());
+  if(idx===-1) return false;
+  users[idx] = { ...users[idx], isProfessor: !!val || !!users[idx].isAdmin };
+  db.saveUsers(users);
   return users;
 }
 
@@ -421,5 +443,7 @@ const fallbacks = {
       authorEmail: 'owner@codearena.local'
     }
   ]
+  ,
+  homeworks:[]
 };
 
