@@ -1,4 +1,4 @@
-import { db, currentUser } from './storage.js';
+import { db, currentUser, persistSubmission } from './storage.js';
 
 function main() {
   const dataEl = document.getElementById('problemData');
@@ -282,7 +282,7 @@ function main() {
       saveSubmission(verdict, firstFail ? 'WA na testu #' + firstFail.idx : 'Accepted');
 
       function saveSubmission(code, text) {
-        const store = JSON.parse(localStorage.getItem('ca_submissions') || '[]');
+        const store = Array.isArray(db.submissions()) ? [...db.submissions()] : [];
         const submission = {
           id: 'S' + Date.now(),
           problemId: problem.id,
@@ -295,7 +295,8 @@ function main() {
           source: data.source || '',
         };
         store.unshift(submission);
-        localStorage.setItem('ca_submissions', JSON.stringify(store));
+        db.saveSubmissions(store);
+        persistSubmission(submission);
         try{
           const lastMap = JSON.parse(localStorage.getItem('ca_last_code') || '{}');
           const existing = lastMap[problem.id];

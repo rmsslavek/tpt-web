@@ -13,6 +13,7 @@ const LS = {
   problems: 'ca_problems',
   contests: 'ca_contests',
   submissions: 'ca_submissions',
+  submissionsBackup: 'ca_submissions_backup',
   session: 'ca_session',
   tests: 'ca_tests',
   homeworks: 'ca_homeworks',
@@ -60,13 +61,33 @@ function loadLocalState(){
   state.users = withDefaultSystemUsers(readJson(LS.users, fallbacks.users));
   state.problems = (readJson(LS.problems, fallbacks.problems) || []).map(normalizeProblem);
   state.contests = readJson(LS.contests, fallbacks.contests || []);
-  state.submissions = readJson(LS.submissions, []);
+  const localSubs = readJson(LS.submissions, []);
+  state.submissions = localSubs.length ? localSubs : readJson(LS.submissionsBackup, []);
   state.tests = withDefaultTests(readJson(LS.tests, fallbacks.tests || []), fallbacks.tests);
   state.homeworks = (readJson(LS.homeworks, fallbacks.homeworks || []) || []).map(normalizeHomework);
 }
 
 async function fetchClientIp(){
-  // CSP blokira spoljne pozive; koristi keš ili fallback
+  if (cachedIp) return cachedIp;
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timeoutId = controller ? setTimeout(() => controller.abort(), 2500) : null;
+  try {
+    const res = await fetch('https://api.ipify.org?format=json', {
+      signal: controller ? controller.signal : undefined,
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error(`ipify status ${res.status}`);
+    const data = await res.json();
+    const ip = data && typeof data.ip === 'string' ? data.ip : null;
+    if (ip) {
+      cachedIp = ip;
+      return ip;
+    }
+  } catch (err) {
+    // Fallback below.
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
   return cachedIp || '127.0.0.1';
 }
 
@@ -134,6 +155,9 @@ async function loadFromFirestore() {
     fetchCollection(COLLECTIONS.submissions),
     fetchCollection(COLLECTIONS.tests),
   ]);
+  const localSubs = readJson(LS.submissions, []);
+  const backupSubs = readJson(LS.submissionsBackup, []);
+  const localMerged = localSubs.length ? localSubs : backupSubs;
   lastFetchedCounts = {
     users: users.length,
     problems: problems.length,
@@ -144,13 +168,14 @@ async function loadFromFirestore() {
   state.users = withDefaultSystemUsers(users);
   state.problems = problems.map(normalizeProblem);
   state.contests = contests;
-  state.submissions = submissions;
+  state.submissions = mergeSubmissions(submissions, localMerged);
   state.tests = withDefaultTests(tests, fallbacks.tests);
 
   localStorage.setItem(LS.users, JSON.stringify(state.users));
   localStorage.setItem(LS.problems, JSON.stringify(state.problems));
   localStorage.setItem(LS.contests, JSON.stringify(state.contests));
   localStorage.setItem(LS.submissions, JSON.stringify(state.submissions));
+  localStorage.setItem(LS.submissionsBackup, JSON.stringify(state.submissions));
   localStorage.setItem(LS.tests, JSON.stringify(state.tests));
 }
 
@@ -227,6 +252,9 @@ export async function ensureSeed() {
   currentSessionHandle = storedSession?.handle || null;
   installStorageBridge();
   if (storedSession) void mirrorSet(LS.session, JSON.stringify(storedSession));
+  if (state.submissions?.length) {
+    void mirrorSet(LS.submissions, JSON.stringify(state.submissions));
+  }
   seedDone = true;
 }
 
@@ -242,6 +270,15 @@ export async function recordUserAccess(handle){
   updated.lastIp = ip;
   state.users[idx] = updated;
   db.saveUsers(state.users);
+}
+
+export async function persistSubmission(submission){
+  if (!firestoreOnline || !submission?.id) return;
+  try{
+    await setDoc(doc(firestore, COLLECTIONS.submissions, submission.id), submission);
+  }catch(err){
+    console.warn('Submission sync failed', err);
+  }
 }
 
 export function setUserDisabled(handle, disabled){
@@ -268,8 +305,20 @@ export const db = {
   contests() { return state.contests; },
   saveContests(v){ localStorage.setItem(LS.contests, JSON.stringify(v)); },
 
-  submissions(){ return state.submissions; },
-  saveSubmissions(v){ localStorage.setItem(LS.submissions, JSON.stringify(v)); },
+  submissions(){
+    if (!state.submissions?.length) {
+      const stored = readJson(LS.submissions, []);
+      const backup = readJson(LS.submissionsBackup, []);
+      const merged = stored?.length ? stored : backup;
+      if (merged?.length) state.submissions = merged;
+    }
+    return state.submissions;
+  },
+  saveSubmissions(v){
+    state.submissions = Array.isArray(v) ? v : [];
+    localStorage.setItem(LS.submissions, JSON.stringify(state.submissions));
+    localStorage.setItem(LS.submissionsBackup, JSON.stringify(state.submissions));
+  },
 
   session(){ return currentSessionHandle ? { handle: currentSessionHandle } : null; },
   saveSession(v){ localStorage.setItem(LS.session, JSON.stringify(v)); },
@@ -347,6 +396,21 @@ function withDefaultTests(list, defaults){
     }
   });
   return tests;
+}
+
+function mergeSubmissions(remote, local) {
+  const merged = [];
+  const byId = new Map();
+  const add = (s) => {
+    if (!s || !s.id) return;
+    if (!byId.has(s.id)) {
+      byId.set(s.id, s);
+      merged.push(s);
+    }
+  };
+  (Array.isArray(remote) ? remote : []).forEach(add);
+  (Array.isArray(local) ? local : []).forEach(add);
+  return merged;
 }
 
 const fallbacks = {
