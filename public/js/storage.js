@@ -210,7 +210,7 @@ async function mirrorSet(key, value) {
   }
   if (key === LS.submissions) {
     state.submissions = safeParse(value, []);
-    return replaceCollection(COLLECTIONS.submissions, state.submissions, 'id');
+    return;
   }
   if (key === LS.tests) {
     state.tests = withDefaultTests(safeParse(value, []), fallbacks.tests);
@@ -316,8 +316,19 @@ export const db = {
   },
   saveSubmissions(v){
     state.submissions = Array.isArray(v) ? v : [];
-    localStorage.setItem(LS.submissions, JSON.stringify(state.submissions));
-    localStorage.setItem(LS.submissionsBackup, JSON.stringify(state.submissions));
+    try{
+      localStorage.setItem(LS.submissions, JSON.stringify(state.submissions));
+      localStorage.setItem(LS.submissionsBackup, JSON.stringify(state.submissions));
+    }catch(err){
+      console.warn('localStorage submissions write failed, saving lean copy', err);
+      const lean = state.submissions.map(stripSubmissionSource);
+      try{
+        localStorage.setItem(LS.submissions, JSON.stringify(lean));
+        localStorage.setItem(LS.submissionsBackup, JSON.stringify(lean));
+      }catch(err2){
+        console.warn('localStorage lean submissions write failed', err2);
+      }
+    }
   },
 
   session(){ return currentSessionHandle ? { handle: currentSessionHandle } : null; },
@@ -411,6 +422,12 @@ function mergeSubmissions(remote, local) {
   (Array.isArray(remote) ? remote : []).forEach(add);
   (Array.isArray(local) ? local : []).forEach(add);
   return merged;
+}
+
+function stripSubmissionSource(s){
+  if (!s || typeof s !== 'object') return s;
+  const { source, ...rest } = s;
+  return rest;
 }
 
 const fallbacks = {
