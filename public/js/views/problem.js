@@ -75,6 +75,7 @@ export function ProblemView({ params }) {
         <div class="row">
           <label>Jezik</label>
           <select name="language" style="max-width:240px">
+            <option value="c">C (10.2.0)</option>
             <option value="cpp" selected>C++ (10.2.0)</option>
             <option value="python">Python (3.10.0)</option>
           </select>

@@ -1,4 +1,5 @@
 import { GOOGLE_CLIENT_ID } from './config.js';
+import { auth, GoogleAuthProvider, signInWithCredential } from './firebaseClient.js';
 import { recordUserAccess } from './storage.js';
 
 // Pomoćne funkcije za dekodiranje JWT i prijavu korisnika u lokalnu sesiju
@@ -60,6 +61,14 @@ async function initAndRender(container){
       callback: async (resp)=>{
         const payload = decodeJwt(resp.credential);
         if(!payload){ alert('Neuspesno citanje Google tokena'); return; }
+        try{
+          const cred = GoogleAuthProvider.credential(resp.credential);
+          await signInWithCredential(auth, cred);
+        }catch(err){
+          console.warn('Firebase Auth Google sign-in failed', err);
+          alert('Prijava nije uspela (Firebase Auth).');
+          return;
+        }
         const result = upsertLocalUserFromGoogle(payload);
         if(!result || result.blocked){
           alert('Ovaj nalog je deaktiviran od strane administratora.');

@@ -1,4 +1,5 @@
 import { db } from './storage.js';
+import { auth, createUserWithEmailAndPassword } from './firebaseClient.js';
 
 const OVERLAY_ID = 'adminSetupOverlay';
 
@@ -41,7 +42,7 @@ function renderOverlay(){
     </div>`;
   document.body.appendChild(overlay);
   const form = overlay.querySelector('#adminSetupForm');
-  form.addEventListener('submit', (e)=>{
+  form.addEventListener('submit', async (e)=>{
     e.preventDefault();
     const data = Object.fromEntries(new FormData(form).entries());
     const handle = (data.handle||'').trim();
@@ -70,6 +71,11 @@ function renderOverlay(){
       isOwner: true,
       disabled: false
     };
+    try{
+      await createUserWithEmailAndPassword(auth, email, password);
+    }catch(err){
+      return showError(errorEl, 'Firebase nalog nije kreiran: ' + (err?.message||'greska'));
+    }
     users.push(adminUser);
     db.saveUsers(users);
     localStorage.setItem('ca_session', JSON.stringify({ handle }));

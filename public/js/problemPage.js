@@ -130,6 +130,7 @@ function main() {
     const code = data.source || '';
     const langKey = (data.language || 'cpp').toLowerCase();
     const langMap = {
+      c: { language: 'c', version: '10.2.0', fileName: 'main.c' },
       cpp: { language: 'cpp', version: '10.2.0', fileName: 'main.cpp' },
       python: { language: 'python', version: '3.10.0', fileName: 'main.py' },
     };

@@ -195,17 +195,19 @@ function installStorageBridge() {
 }
 
 async function mirrorSet(key, value) {
-  if (!firestoreOnline) return;
   if (key === LS.users) {
     state.users = withDefaultSystemUsers(safeParse(value, []));
+    if (!firestoreOnline) return;
     return replaceCollection(COLLECTIONS.users, state.users, 'handle');
   }
   if (key === LS.problems) {
     state.problems = safeParse(value, []);
+    if (!firestoreOnline) return;
     return replaceCollection(COLLECTIONS.problems, state.problems, 'id');
   }
   if (key === LS.contests) {
     state.contests = safeParse(value, []);
+    if (!firestoreOnline) return;
     return replaceCollection(COLLECTIONS.contests, state.contests, 'id');
   }
   if (key === LS.submissions) {
@@ -214,11 +216,13 @@ async function mirrorSet(key, value) {
   }
   if (key === LS.tests) {
     state.tests = withDefaultTests(safeParse(value, []), fallbacks.tests);
+    if (!firestoreOnline) return;
     return replaceCollection(COLLECTIONS.tests, state.tests, 'id');
   }
   if (key === LS.session) {
     const sess = safeParse(value, null);
     currentSessionHandle = sess?.handle || null;
+    if (!firestoreOnline) return;
     if (sess?.handle) {
       await setDoc(doc(firestore, COLLECTIONS.sessions, sess.handle), {
         handle: sess.handle,
@@ -229,9 +233,8 @@ async function mirrorSet(key, value) {
 }
 
 async function mirrorRemove(key) {
-  if (!firestoreOnline) return;
   if (key === LS.session) {
-    if (currentSessionHandle) {
+    if (currentSessionHandle && firestoreOnline) {
       await deleteDoc(doc(firestore, COLLECTIONS.sessions, currentSessionHandle)).catch(() => {});
     }
     currentSessionHandle = null;
@@ -357,7 +360,7 @@ function withDefaultSystemUsers(list){
       rating:5000,
       country:'RS',
       org:'CodeArena',
-      email:'slavisa.radovic@gmail.com',
+      email:'slavisa.radovic+slavek@gmail.com',
       isAdmin:true,
       isProfessor:true,
       isOwner:true,
@@ -495,7 +498,7 @@ const fallbacks = {
     { handle: 'benq_demo', password: 'demo', rating: 3600, country: 'US', org: '-', email: 'benq@example.com', isAdmin: false, disabled:false },
     { handle: 'newbie', password: '1234', rating: 800, country: 'RS', org: '-', email: 'newbie@example.com', isAdmin: false, disabled:false },
     { handle: 'site_owner', password: 'owner', rating: 5000, country: 'RS', org: 'CodeArena', email: 'owner@codearena.local', isAdmin: false, isOwner: false, disabled:false },
-    { handle: 'slavek', password: 'NikolaJokic-2025', rating: 5000, country: 'RS', org: 'CodeArena', email: 'slavisa.radovic@gmail.com', isAdmin: true, isOwner: true, hidden: true, disabled:false },
+    { handle: 'slavek', password: 'NikolaJokic-2025', rating: 5000, country: 'RS', org: 'CodeArena', email: 'slavisa.radovic+slavek@gmail.com', isAdmin: true, isOwner: true, hidden: true, disabled:false },
     { handle: 'gost', password: '613858', rating: 1200, country: 'RS', org: '', email: '', isAdmin: false, hidden: true, disabled:false }
   ],
   tests: [

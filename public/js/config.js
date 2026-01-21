@@ -3,7 +3,8 @@
 // Authorized JavaScript origins uključite npr. http://localhost:5500
 // Authorized redirect URIs nisu potrebni za GIS token (One Tap/Sign-In button) u ovoj varijanti.
 
-export const GOOGLE_CLIENT_ID = '126833017649-d2adn22f4830k1nk6i955gpdag75t0en.apps.googleusercontent.com';
+//export const GOOGLE_CLIENT_ID = '126833017649-d2adn22f4830k1nk6i955gpdag75t0en.apps.googleusercontent.com';
+export const GOOGLE_CLIENT_ID =  "644290484820-9d6sau5njda1s2o79bhi2er70svjojij.apps.googleusercontent.com";
 
 // Slanje emailova preko Web3Forms (besplatni plan).
 export const EMAIL_API_CONFIG = {

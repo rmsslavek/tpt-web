@@ -14,6 +14,14 @@ import {
   writeBatch,
   connectFirestoreEmulator,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithCredential,
+  signOut,
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD2i5bZ3OPxAcxQN9NlqP0Ycy2JzBgHHuY",
@@ -27,6 +35,7 @@ const firebaseConfig = {
 
 export const app = initializeApp(firebaseConfig);
 export const firestore = getFirestore(app);
+export const auth = getAuth(app);
 
 // Lokalni rad sa Firestore emulatorom ako je pokrenuto na localhost/127.0.0.1
 if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
@@ -50,6 +59,11 @@ export {
   query,
   where,
   writeBatch,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithCredential,
+  signOut,
 };
 
 // Omogući pristup Firestore helperima i u inline skriptama (npr. test attempts)
@@ -64,6 +78,14 @@ if (typeof window !== 'undefined') {
     query,
     where,
     serverTimestamp,
+  };
+  window.__authTools = {
+    auth,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    GoogleAuthProvider,
+    signInWithCredential,
+    signOut,
   };
 }
 

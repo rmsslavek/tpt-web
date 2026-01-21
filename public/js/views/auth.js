@@ -43,10 +43,91 @@ export function LoginView(){
         const u = users.find(x=>x.handle.toLowerCase()===data.handle.toLowerCase() && x.password===data.password);
         if(!u){ showLoginError(); return; }
         if(u.disabled){ showLoginError('Ovaj nalog je deaktiviran od strane administratora.'); return; }
-        localStorage.setItem('ca_session', JSON.stringify({ handle: u.handle }));
-        try{ await window.recordUserAccess?.(u.handle); }catch(_){}
-        window.dispatchEvent(new Event('ca:session'));
-        location.hash = '#/';
+        const allowLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+        const isSlavek = (u.handle||'').toLowerCase() === 'slavek';
+        const defaultSlavekEmail = 'slavisa.radovic+slavek@gmail.com';
+        const finalizeSession = async ()=>{
+          localStorage.setItem('ca_session', JSON.stringify({ handle: u.handle }));
+          try{ await window.recordUserAccess?.(u.handle); }catch(_){}
+          window.dispatchEvent(new Event('ca:session'));
+          location.hash = '#/';
+        };
+        const tools = window.__authTools || {};
+        if(!tools.auth || !tools.signInWithEmailAndPassword || !tools.createUserWithEmailAndPassword){
+          if(allowLocal){
+            console.warn('Firebase Auth nije dostupan, koristim lokalnu prijavu.');
+            await finalizeSession();
+            return;
+          }
+          showLoginError('Firebase Auth nije dostupan. Pokusajte ponovo.');
+          return;
+        }
+        if(!(u.email||'').trim()){
+          if(isSlavek){
+            const email = defaultSlavekEmail;
+            try{
+              await tools.createUserWithEmailAndPassword(tools.auth, email, data.password);
+            }catch(errCreate){
+              showLoginError('Ne mogu da kreiram Firebase nalog: ' + (errCreate?.message||'greska'));
+              return;
+            }
+            u.email = email;
+            localStorage.setItem('ca_users', JSON.stringify(users));
+            await finalizeSession();
+            return;
+          }
+          if(allowLocal){
+            await finalizeSession();
+            return;
+          }
+          const entered = window.prompt('Unesite email za ovaj nalog (obavezno za prijavu):', '');
+          const email = (entered||'').trim();
+          if(!email){ return; }
+          if(!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(email)){
+            showLoginError('Email nije ispravan format.');
+            return;
+          }
+          try{
+            await tools.createUserWithEmailAndPassword(tools.auth, email, data.password);
+          }catch(errCreate){
+            showLoginError('Ne mogu da kreiram Firebase nalog: ' + (errCreate?.message||'greska'));
+            return;
+          }
+          u.email = email;
+          localStorage.setItem('ca_users', JSON.stringify(users));
+          localStorage.setItem('ca_session', JSON.stringify({ handle: u.handle }));
+          try{ await window.recordUserAccess?.(u.handle); }catch(_){}
+          window.dispatchEvent(new Event('ca:session'));
+          location.hash = '#/';
+          return;
+        }
+        try{
+          await tools.signInWithEmailAndPassword(tools.auth, u.email, data.password);
+        }catch(err){
+          const code = err && err.code ? String(err.code) : '';
+          if(code === 'auth/user-not-found'){
+            try{
+              await tools.createUserWithEmailAndPassword(tools.auth, u.email, data.password);
+            }catch(errCreate){
+              if(allowLocal){
+                console.warn('Firebase Auth nalog nije napravljen, koristim lokalnu prijavu.', errCreate);
+                await finalizeSession();
+                return;
+              }
+              showLoginError('Ne mogu da kreiram Firebase nalog: ' + (errCreate?.message||'greska'));
+              return;
+            }
+          }else{
+            if(allowLocal){
+              console.warn('Firebase Auth prijava nije uspela, koristim lokalnu prijavu.', err);
+              await finalizeSession();
+              return;
+            }
+            showLoginError('Prijava nije uspela (Firebase Auth).');
+            return;
+          }
+        }
+        await finalizeSession();
       });
       // Google dugme
       if(window.renderGoogleButtonInto){ window.renderGoogleButtonInto('gBtn'); }
@@ -77,12 +158,23 @@ export function RegisterView(){
         if(users.some(u=>u.handle.toLowerCase()===data.handle.toLowerCase())){ alert('Korisnicko ime zauzeto'); return; }
         if(!(data.email||'').trim()){ alert('Email je obavezan'); return; }
         const email = (data.email||'').trim();
-        users.push({ handle:data.handle, password:data.password, rating:1500, country:data.country||'', org:data.org||'', email, disabled:false });
-        localStorage.setItem('ca_users', JSON.stringify(users));
-        localStorage.setItem('ca_session', JSON.stringify({ handle: data.handle }));
-        try{ window.recordUserAccess?.(data.handle); }catch(_){}
-        window.dispatchEvent(new Event('ca:session'));
-        location.hash = '#/';
+        const tools = window.__authTools || {};
+        if(!tools.auth || !tools.createUserWithEmailAndPassword){
+          alert('Firebase Auth nije dostupan. Pokusajte ponovo.');
+          return;
+        }
+        tools.createUserWithEmailAndPassword(tools.auth, email, data.password)
+          .then(()=>{
+            users.push({ handle:data.handle, password:data.password, rating:1500, country:data.country||'', org:data.org||'', email, disabled:false });
+            localStorage.setItem('ca_users', JSON.stringify(users));
+            localStorage.setItem('ca_session', JSON.stringify({ handle: data.handle }));
+            try{ window.recordUserAccess?.(data.handle); }catch(_){}
+            window.dispatchEvent(new Event('ca:session'));
+            location.hash = '#/';
+          })
+          .catch((err)=>{
+            alert('Registracija nije uspela (Firebase Auth): ' + (err?.message||'greska'));
+          });
       });
     })();
   </script>`;

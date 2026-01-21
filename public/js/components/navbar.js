@@ -1,4 +1,5 @@
 import { currentUser, db } from '../storage.js';
+import { auth, signOut } from '../firebaseClient.js';
 
 export function Navbar(root){
   const render = () => {
@@ -52,9 +53,10 @@ ${me ? `<a href="#/homeworks">Domaci${hwBadge}</a>` : ''}
       </div>
     </nav>`;
     const lb = root.querySelector('#logoutBtn');
-    if (lb) lb.addEventListener('click', () => {
+    if (lb) lb.addEventListener('click', async () => {
       if (!window.confirm('Da li ste sigurni da zelite da izadjete?')) return;
       localStorage.removeItem('ca_session');
+      try{ await signOut(auth); }catch(_){}
       window.dispatchEvent(new Event('ca:session'));
       location.hash = '#/';
       window.location.reload();
